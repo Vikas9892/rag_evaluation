@@ -1,0 +1,34 @@
+Computer Networks — Study Notes
+
+OSI Model (7 Layers)
+Layer 7 - Application  : HTTP, FTP, SMTP, DNS
+Layer 6 - Presentation : Encryption, compression, encoding
+Layer 5 - Session      : Session establishment/termination
+Layer 4 - Transport    : TCP, UDP — end-to-end delivery
+Layer 3 - Network      : IP, ICMP — routing
+Layer 2 - Data Link    : Ethernet, MAC addresses
+Layer 1 - Physical     : Cables, bits on the wire
+
+TCP vs UDP
+TCP: connection-oriented, reliable, ordered, flow control, congestion control.
+UDP: connectionless, fast, no guarantees — used for DNS, streaming, gaming.
+
+TCP Three-Way Handshake
+SYN  -> Server
+SYN-ACK <- Server
+ACK  -> Server (connection established)
+
+HTTP
+HTTP/1.1 — persistent connections, pipelining.
+HTTP/2   — multiplexing, header compression (HPACK), server push.
+HTTP/3   — runs over QUIC (UDP-based), lower latency.
+
+DNS Resolution
+Client -> Recursive Resolver -> Root NS -> TLD NS -> Authoritative NS -> IP
+
+Subnetting
+CIDR notation: 192.168.1.0/24 means 256 addresses, 254 usable hosts.
+Subnet mask /24 = 255.255.255.0
+
+Congestion Control
+Slow Start -> Congestion Avoidance -> Fast Retransmit -> Fast Recovery
