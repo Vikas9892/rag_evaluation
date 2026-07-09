@@ -10,7 +10,12 @@ LOG_DIR = BASE_DIR / "logs"
 SUPPORTED_EXTENSIONS = {".pdf", ".txt", ".md", ".markdown"}
 
 EMBEDDING_MODEL = "BAAI/bge-small-en-v1.5"
+BATCH_SIZE = 32
+DEVICE = "cpu"
 CHUNK_SIZE = 500
 CHUNK_OVERLAP = 100
 SEPARATORS = ["\n\n", "\n", ". ", " ", ""]
 TOP_K = 5
+
+VECTORS_FILE = INDEX_DIR / "vectors.npy"
+METADATA_FILE = INDEX_DIR / "metadata.json"
