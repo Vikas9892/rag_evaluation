@@ -1,0 +1,27 @@
+.git
+.github
+__pycache__
+*.pyc
+*.pyo
+.pytest_cache
+.coverage
+coverage.xml
+*.egg-info
+
+# Never bake secrets into the image
+.env
+*.env
+
+# Large artefacts — mounted at runtime
+index/
+reports/
+logs/
+data/
+
+# Dev and test files not needed in production image
+tests/
+load_tests/
+docs/
+scripts/
+.coveragerc
+pyproject.toml

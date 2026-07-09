@@ -2,7 +2,7 @@ import json
 import time
 import uuid
 from dataclasses import dataclass, field
-from typing import List, Optional
+from typing import Generator, Iterator, List, Optional
 
 from config.logging_config import get_logger
 from config.settings import TOP_K
@@ -110,6 +110,37 @@ class RAGService:
             generation_latency_ms=response.latency_ms,
             request_id=request_id,
         )
+
+    # ------------------------------------------------------------------
+    # Streaming
+    # ------------------------------------------------------------------
+
+    def stream(
+        self, question: str, top_k: Optional[int] = None
+    ) -> Generator[dict, None, None]:
+        """Yield SSE-ready event dicts: sources → tokens → done.
+
+        The streaming path bypasses the metrics counter — the caller is
+        responsible for recording latency via the 'done' event timing.
+        """
+        k = top_k if top_k is not None else self._default_top_k
+
+        results = self._retriever.retrieve(question, top_k=k)
+        sources = [
+            {
+                "document_id": r.chunk.document_id,
+                "chunk_id": r.chunk.chunk_id,
+                "score": round(r.score, 4),
+            }
+            for r in results
+        ]
+        yield {"type": "sources", "data": sources}
+
+        prompt = self._builder.build(question, results)
+        for token in self._generator.stream(prompt, results):
+            yield {"type": "token", "data": token}
+
+        yield {"type": "done"}
 
     # ------------------------------------------------------------------
     # Metrics

@@ -1,0 +1,29 @@
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q --tb=short"
+markers = [
+    "slow: marks tests as slow (model downloads, real I/O)",
+    "integration: marks tests that require a live FAISS index",
+]
+
+[tool.coverage.run]
+source = ["."]
+omit = [
+    "tests/*",
+    "load_tests/*",
+    "scripts/*",
+    "docs/*",
+    "*/site-packages/*",
+    "setup.py",
+    "conftest.py",
+]
+
+[tool.coverage.report]
+exclude_lines = [
+    "pragma: no cover",
+    "if __name__ == .__main__.:",
+    "raise NotImplementedError",
+    "class .*\\bProtocol\\b",
+    "@(abc\\.)?abstractmethod",
+]
+show_missing = true

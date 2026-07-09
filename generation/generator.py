@@ -1,7 +1,7 @@
 import os
 import time
 from abc import ABC, abstractmethod
-from typing import List
+from typing import Generator, List
 
 from config.logging_config import get_logger
 from config.settings import (
@@ -33,6 +33,19 @@ class BaseGenerator(ABC):
         self, prompt: Prompt, sources: List[RetrievalResult]
     ) -> GenerationResponse:
         """Call the LLM and return a fully-populated GenerationResponse."""
+
+    def stream(
+        self, prompt: Prompt, sources: List[RetrievalResult]
+    ) -> Generator[str, None, None]:
+        """Yield answer tokens one by one as they arrive from the LLM.
+
+        Default implementation raises NotImplementedError — override in
+        concrete subclasses that support server-sent streaming (e.g. Groq).
+        """
+        raise NotImplementedError(
+            f"{type(self).__name__} does not support streaming"
+        )
+        yield  # make this a generator function even without overriding
 
 
 class GroqGenerator(BaseGenerator):
@@ -108,6 +121,31 @@ class GroqGenerator(BaseGenerator):
             completion_tokens=completion_tokens,
             latency_ms=latency_ms,
         )
+
+    # ------------------------------------------------------------------
+    # Streaming
+    # ------------------------------------------------------------------
+
+    def stream(
+        self, prompt: Prompt, sources: List[RetrievalResult]
+    ) -> Generator[str, None, None]:
+        """Yield answer tokens as they arrive from the Groq streaming API."""
+        messages = [
+            {"role": "system", "content": prompt.system},
+            {"role": "user", "content": prompt.user},
+        ]
+        response = self._client.chat.completions.create(
+            model=self.model,
+            messages=messages,
+            temperature=self.temperature,
+            max_tokens=self.max_tokens,
+            timeout=self.timeout,
+            stream=True,
+        )
+        for chunk in response:
+            delta = chunk.choices[0].delta
+            if delta.content:
+                yield delta.content
 
     # ------------------------------------------------------------------
     # Retry logic

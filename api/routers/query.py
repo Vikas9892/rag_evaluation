@@ -9,7 +9,22 @@ logger = get_logger(__name__)
 router = APIRouter(tags=["query"])
 
 
-@router.post("/query", response_model=QueryResponse)
+@router.post(
+    "/query",
+    response_model=QueryResponse,
+    summary="Answer a question using the RAG pipeline",
+    description=(
+        "Embeds the question, retrieves the top-K most relevant chunks from the FAISS index, "
+        "builds a grounded prompt, and calls the Groq LLM to generate an answer. "
+        "The response includes per-source attribution and end-to-end latency metrics."
+    ),
+    response_description="Answer with sources and latency breakdown",
+    responses={
+        400: {"description": "Empty or whitespace-only question"},
+        503: {"description": "FAISS index not built or GROQ_API_KEY missing"},
+        504: {"description": "LLM request timed out after all retries"},
+    },
+)
 async def query_endpoint(
     request: QueryRequest,
     service: RAGService = Depends(get_service),

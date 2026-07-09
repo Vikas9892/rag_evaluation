@@ -69,6 +69,58 @@ class VectorStorage:
         logger.info("Saved metadata to %s", self.metadata_path)
 
     # ------------------------------------------------------------------
+    # Incremental write
+    # ------------------------------------------------------------------
+
+    def append(self, new_vectors: np.ndarray, new_chunks: List[Chunk]) -> None:
+        """Append new vectors + chunks to an existing index without a full rebuild.
+
+        Loads the current artefacts, stacks the new data, then overwrites both
+        files atomically.  Raises FileNotFoundError if the index does not exist
+        yet — call save() for the initial build.
+        """
+        if new_vectors.shape[0] != len(new_chunks):
+            raise ValueError(
+                f"Length mismatch: {new_vectors.shape[0]} vectors vs {len(new_chunks)} chunks"
+            )
+
+        existing_vectors, existing_records = self.load()
+
+        combined_vectors = np.vstack([existing_vectors, new_vectors])
+
+        new_records: List[Dict] = [
+            {
+                "chunk_id": c.chunk_id,
+                "document_id": c.document_id,
+                "text": c.text,
+                "start_char": c.start_char,
+                "end_char": c.end_char,
+                "metadata": c.metadata,
+            }
+            for c in new_chunks
+        ]
+        combined_records = existing_records + new_records
+
+        # Re-use save() for the actual write to keep a single code path
+        combined_chunks = [
+            Chunk(
+                chunk_id=r["chunk_id"],
+                document_id=r["document_id"],
+                text=r["text"],
+                start_char=r["start_char"],
+                end_char=r["end_char"],
+                metadata=r.get("metadata", {}),
+            )
+            for r in combined_records
+        ]
+        self.save(combined_vectors, combined_chunks)
+        logger.info(
+            "Appended %d chunks (index now %d total)",
+            len(new_chunks),
+            len(combined_chunks),
+        )
+
+    # ------------------------------------------------------------------
     # Read
     # ------------------------------------------------------------------
 
