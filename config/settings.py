@@ -19,3 +19,4 @@ TOP_K = 5
 
 VECTORS_FILE = INDEX_DIR / "vectors.npy"
 METADATA_FILE = INDEX_DIR / "metadata.json"
+FAISS_INDEX_FILE = INDEX_DIR / "faiss.index"
