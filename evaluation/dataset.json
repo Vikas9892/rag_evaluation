@@ -1,0 +1,92 @@
+[
+  {
+    "id": 1,
+    "question": "What are the 7 layers of the OSI model?",
+    "expected_answer": "The 7 layers are: Physical, Data Link, Network, Transport, Session, Presentation, and Application. The Application layer includes HTTP, FTP, SMTP, DNS; Transport uses TCP and UDP; Network uses IP and ICMP.",
+    "expected_chunk_ids": ["cn.txt_chunk_0000"]
+  },
+  {
+    "id": 2,
+    "question": "What is the difference between TCP and UDP?",
+    "expected_answer": "TCP is connection-oriented, reliable, ordered, and provides flow and congestion control. UDP is connectionless, fast, and provides no guarantees; it is used for DNS, streaming, and gaming.",
+    "expected_chunk_ids": ["cn.txt_chunk_0001"]
+  },
+  {
+    "id": 3,
+    "question": "Describe the TCP three-way handshake.",
+    "expected_answer": "The three-way handshake consists of three steps: the client sends SYN to the server, the server responds with SYN-ACK, and the client sends ACK to establish the connection.",
+    "expected_chunk_ids": ["cn.txt_chunk_0001"]
+  },
+  {
+    "id": 4,
+    "question": "What improvements does HTTP/2 bring over HTTP/1.1?",
+    "expected_answer": "HTTP/2 introduces multiplexing, header compression using HPACK, and server push. HTTP/1.1 used persistent connections and pipelining.",
+    "expected_chunk_ids": ["cn.txt_chunk_0001"]
+  },
+  {
+    "id": 5,
+    "question": "How does DNS resolution work?",
+    "expected_answer": "DNS resolution goes: Client to Recursive Resolver to Root NS to TLD NS to Authoritative NS, which returns the IP address.",
+    "expected_chunk_ids": ["cn.txt_chunk_0002"]
+  },
+  {
+    "id": 6,
+    "question": "What is CIDR notation in subnetting?",
+    "expected_answer": "CIDR notation represents an IP address with a prefix length, for example 192.168.1.0/24 means 256 addresses with 254 usable hosts. The subnet mask /24 equals 255.255.255.0.",
+    "expected_chunk_ids": ["cn.txt_chunk_0002"]
+  },
+  {
+    "id": 7,
+    "question": "What are the ACID properties of a database transaction?",
+    "expected_answer": "ACID stands for: Atomicity (all or nothing), Consistency (DB moves from one valid state to another), Isolation (concurrent transactions do not interfere), and Durability (committed data survives crashes).",
+    "expected_chunk_ids": ["dbms.md_chunk_0000"]
+  },
+  {
+    "id": 8,
+    "question": "How does a B-Tree index differ from a Hash index?",
+    "expected_answer": "A B-Tree index allows O(log n) lookups and is used by most RDBMS by default. A Hash index allows O(1) equality lookups but cannot perform range queries.",
+    "expected_chunk_ids": ["dbms.md_chunk_0001"]
+  },
+  {
+    "id": 9,
+    "question": "Explain the normal forms in database normalisation.",
+    "expected_answer": "1NF requires atomic values and no repeating groups. 2NF is 1NF plus no partial dependencies on a composite key. 3NF is 2NF plus no transitive dependencies. BCNF requires every determinant to be a candidate key.",
+    "expected_chunk_ids": ["dbms.md_chunk_0001"]
+  },
+  {
+    "id": 10,
+    "question": "What does the CAP theorem state?",
+    "expected_answer": "The CAP theorem states that a distributed system can guarantee at most 2 of the following 3 properties: Consistency (every read gets the latest write), Availability (every request gets a response), and Partition Tolerance (system works despite network splits).",
+    "expected_chunk_ids": ["dbms.md_chunk_0002"]
+  },
+  {
+    "id": 11,
+    "question": "What is a process and what information does the PCB store?",
+    "expected_answer": "A process is a program in execution. The OS manages it through the Process Control Block (PCB), which stores the PID, state, program counter, registers, and memory limits.",
+    "expected_chunk_ids": ["os.md_chunk_0000"]
+  },
+  {
+    "id": 12,
+    "question": "How does virtual memory use paging?",
+    "expected_answer": "Virtual memory allows each process to behave as if it has exclusive access to main memory. Paging divides virtual memory into fixed-size pages that are mapped to physical frames.",
+    "expected_chunk_ids": ["os.md_chunk_0000"]
+  },
+  {
+    "id": 13,
+    "question": "What are common page replacement algorithms in operating systems?",
+    "expected_answer": "Common page replacement algorithms are FIFO (First-In First-Out), LRU (Least Recently Used), and Optimal (also known as Belady's algorithm).",
+    "expected_chunk_ids": ["os.md_chunk_0001"]
+  },
+  {
+    "id": 14,
+    "question": "How does the operating system handle race conditions?",
+    "expected_answer": "Race conditions occur when multiple threads access shared data concurrently. The OS handles them using synchronisation mechanisms such as mutexes, semaphores, monitors, and spinlocks.",
+    "expected_chunk_ids": ["os.md_chunk_0001"]
+  },
+  {
+    "id": 15,
+    "question": "What are the classic synchronisation problems in operating systems?",
+    "expected_answer": "The classic synchronisation problems are the Producer-Consumer problem, the Readers-Writers problem, and the Dining Philosophers problem.",
+    "expected_chunk_ids": ["os.md_chunk_0001"]
+  }
+]

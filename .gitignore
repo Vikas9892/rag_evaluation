@@ -16,3 +16,4 @@ index/faiss.index
 index/metadata.json
 index/vectors.npy
 data/processed/
+reports/
