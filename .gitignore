@@ -9,6 +9,7 @@ dist/
 build/
 .pytest_cache/
 .coverage
+coverage.xml
 htmlcov/
 
 logs/*.log
