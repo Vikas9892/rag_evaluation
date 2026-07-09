@@ -1,0 +1,98 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: RAG Evaluation API — FastAPI on Lambda + HTTP API Gateway
+
+# ---------------------------------------------------------------------------
+# Deployment prerequisites
+# ---------------------------------------------------------------------------
+# 1. Install dependencies locally:
+#      pip install -r requirements.txt -t .aws-sam/build/deps
+# 2. Large binary artefacts (FAISS index, sentence-transformer weights) must
+#    be stored in S3 and pulled into /tmp at cold-start — Lambda's unzipped
+#    deployment limit is 250 MB.  Set environment variables INDEX_S3_BUCKET
+#    and HF_HOME=/tmp so the model cache lands in writable storage.
+# 3. Build and deploy:
+#      sam build && sam deploy --guided
+# ---------------------------------------------------------------------------
+
+Globals:
+  Function:
+    Timeout: 60
+    MemorySize: 1024
+    Runtime: python3.12
+    Environment:
+      Variables:
+        LOG_LEVEL: INFO
+
+Resources:
+
+  # -------------------------------------------------------------------------
+  # Lambda function
+  # -------------------------------------------------------------------------
+  RagApiFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: rag-evaluation-api
+      CodeUri: ../
+      Handler: aws.lambda_handler.handler
+      Description: RAG pipeline — semantic retrieval + Groq LLM generation
+      Environment:
+        Variables:
+          # GROQ_API_KEY is resolved at deploy time from Parameter Store.
+          # Store it first: aws ssm put-parameter --name /rag/groq_api_key \
+          #   --value "gsk_..." --type SecureString
+          GROQ_API_KEY: !Sub '{{resolve:ssm:/rag/groq_api_key:1}}'
+      Policies:
+        - SSMParameterReadPolicy:
+            ParameterName: /rag/groq_api_key
+      Events:
+        QueryEvent:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref RagHttpApi
+            Path: /query
+            Method: POST
+        HealthEvent:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref RagHttpApi
+            Path: /health
+            Method: GET
+        MetricsEvent:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref RagHttpApi
+            Path: /metrics
+            Method: GET
+
+  # -------------------------------------------------------------------------
+  # HTTP API Gateway (lower latency and cost than REST API)
+  # -------------------------------------------------------------------------
+  RagHttpApi:
+    Type: AWS::Serverless::HttpApi
+    Properties:
+      Name: rag-evaluation-api
+      Description: HTTP API for the RAG evaluation pipeline
+      StageName: prod
+      CorsConfiguration:
+        AllowOrigins:
+          - "*"
+        AllowMethods:
+          - GET
+          - POST
+        AllowHeaders:
+          - Content-Type
+          - Authorization
+
+Outputs:
+  ApiEndpoint:
+    Description: API Gateway endpoint URL
+    Value: !Sub 'https://${RagHttpApi}.execute-api.${AWS::Region}.amazonaws.com'
+    Export:
+      Name: !Sub '${AWS::StackName}-ApiEndpoint'
+
+  FunctionArn:
+    Description: Lambda function ARN
+    Value: !GetAtt RagApiFunction.Arn
+    Export:
+      Name: !Sub '${AWS::StackName}-FunctionArn'
