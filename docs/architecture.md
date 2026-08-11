@@ -62,7 +62,9 @@ relevant passages and feeds them as grounded context to an LLM.
 │  (title, text)  │
 └────────┬────────┘
          │  DocumentSplitter  (RecursiveCharacterTextSplitter)
-         │  chunk_size=500, overlap=100
+         │  chunk_size=250, overlap=50
+         │  separators: "\n## ", "\n### ", "\n\n", "\n", ". ", " ", ""
+         │  then merge chunks shorter than MIN_CHUNK_CHARS=50
          ▼
 ┌─────────────────┐
 │  Chunk list     │
@@ -166,7 +168,7 @@ ingestion/
   └── parser.py → loader.py → document.py → cleaner.py
 
 chunking/
-  └── chunk.py ← splitter.py
+  └── chunk.py ← splitter.py   (heading-aware split, then short-chunk merge)
 
 embeddings/
   └── embedder.py → service.py → storage.py

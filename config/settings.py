@@ -14,6 +14,11 @@ BATCH_SIZE = 32
 DEVICE = "cpu"
 CHUNK_SIZE = 250
 CHUNK_OVERLAP = 50
+# Chunks shorter than this are merged into their neighbour rather than indexed
+# on their own. Splitting on headings otherwise emits heading-only chunks
+# ("## ACID Properties"), which match a query's phrasing while carrying none of
+# the answer. Clamped to CHUNK_SIZE // 2 at runtime so it can never cascade.
+MIN_CHUNK_CHARS = 50
 # Heading separators come first so a chunk aligns to one concept rather than
 # straddling several sections; paragraph/sentence/word fallbacks follow.
 SEPARATORS = ["\n## ", "\n### ", "\n\n", "\n", ". ", " ", ""]

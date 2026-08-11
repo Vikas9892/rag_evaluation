@@ -3,12 +3,15 @@ from typing import List, Tuple
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 
 from config.logging_config import get_logger
-from config.settings import CHUNK_OVERLAP, CHUNK_SIZE, SEPARATORS
+from config.settings import CHUNK_OVERLAP, CHUNK_SIZE, MIN_CHUNK_CHARS, SEPARATORS
 from ingestion.document import Document
 
 from .chunk import Chunk
 
 logger = get_logger(__name__)
+
+# (text, start_char, end_char) for one candidate chunk, before merging.
+_Piece = Tuple[str, int, int]
 
 
 class DocumentSplitter:
@@ -27,10 +30,15 @@ class DocumentSplitter:
         chunk_size: int = CHUNK_SIZE,
         chunk_overlap: int = CHUNK_OVERLAP,
         separators: List[str] | None = None,
+        min_chunk_chars: int = MIN_CHUNK_CHARS,
     ) -> None:
         self.chunk_size = chunk_size
         self.chunk_overlap = chunk_overlap
         self.separators = separators if separators is not None else SEPARATORS
+        # Clamped below half the chunk size: a threshold at or above chunk_size
+        # would classify every chunk as short and cascade the whole document
+        # into a single blob.
+        self.min_chunk_chars = max(0, min(min_chunk_chars, chunk_size // 2))
         self._splitter = RecursiveCharacterTextSplitter(
             chunk_size=chunk_size,
             chunk_overlap=chunk_overlap,
@@ -50,12 +58,21 @@ class DocumentSplitter:
             return []
 
         raw_chunks: List[str] = self._splitter.split_text(document.text)
-        total = len(raw_chunks)
-        chunks: List[Chunk] = []
-        search_pos = 0
 
-        for idx, chunk_text in enumerate(raw_chunks):
+        pieces: List[_Piece] = []
+        search_pos = 0
+        for chunk_text in raw_chunks:
             start, end = self._locate(document.text, chunk_text, search_pos)
+            pieces.append((chunk_text, start, end))
+            # Advance the search cursor past this chunk, minus the overlap window.
+            search_pos = max(search_pos, start + len(chunk_text) - self.chunk_overlap)
+
+        pieces = self._merge_short(pieces, document.text)
+
+        total = len(pieces)
+        chunks: List[Chunk] = []
+
+        for idx, (chunk_text, start, end) in enumerate(pieces):
             metadata = {
                 **document.metadata,
                 "chunk_index": idx,
@@ -74,10 +91,14 @@ class DocumentSplitter:
                     metadata=metadata,
                 )
             )
-            # Advance the search cursor past this chunk, minus the overlap window.
-            search_pos = max(search_pos, start + len(chunk_text) - self.chunk_overlap)
 
-        logger.info("'%s' -> %d chunk(s)", document.id, total)
+        if total != len(raw_chunks):
+            logger.info(
+                "'%s' -> %d chunk(s) (%d merged as shorter than %d chars)",
+                document.id, total, len(raw_chunks) - total, self.min_chunk_chars,
+            )
+        else:
+            logger.info("'%s' -> %d chunk(s)", document.id, total)
         return chunks
 
     def split_many(self, documents: List[Document]) -> List[Chunk]:
@@ -90,6 +111,52 @@ class DocumentSplitter:
     # ------------------------------------------------------------------
     # Internals
     # ------------------------------------------------------------------
+
+    def _merge_short(self, pieces: List[_Piece], source: str) -> List[_Piece]:
+        """Fold chunks shorter than min_chunk_chars into their neighbour.
+
+        Splitting on headings emits heading-only chunks such as
+        "## ACID Properties".  Indexed alone they are pure noise: they match a
+        query's phrasing closely while containing none of the answer, so they
+        outrank the chunk that actually holds it.
+
+        Short chunks merge *forward*, so a heading becomes the prefix of the
+        section it introduces — the heading text is retained as signal rather
+        than discarded.  A trailing short chunk has nothing to merge into, so it
+        merges backward instead.  Content is never dropped: a document that is
+        entirely shorter than the threshold survives as a single chunk.
+
+        Merged text is re-sliced from the source so start/end offsets stay exact
+        and the original separator between the parts is preserved.
+        """
+        if self.min_chunk_chars <= 0 or len(pieces) <= 1:
+            return pieces
+
+        merged: List[_Piece] = []
+        pending: _Piece | None = None
+
+        for text, start, end in pieces:
+            if pending is not None:
+                p_start, p_end = pending[1], pending[2]
+                start, end = p_start, max(p_end, end)
+                text = source[start:end]
+                pending = None
+
+            if len(text.strip()) < self.min_chunk_chars:
+                pending = (text, start, end)  # carry into the next piece
+                continue
+
+            merged.append((text, start, end))
+
+        if pending is not None:
+            if merged:
+                l_text, l_start, l_end = merged[-1]
+                end = max(l_end, pending[2])
+                merged[-1] = (source[l_start:end], l_start, end)
+            else:
+                merged.append(pending)  # whole document is below the threshold
+
+        return merged
 
     def _locate(self, text: str, chunk: str, hint: int) -> Tuple[int, int]:
         """Return (start, end) char offsets for chunk inside text.

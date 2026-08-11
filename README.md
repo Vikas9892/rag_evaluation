@@ -107,7 +107,7 @@ when its answer genuinely spans multiple chunks; the relevant set is their union
 
 ### Evaluation Results
 
-Measured on a 15-question content-anchored dataset over a 23-chunk corpus,
+Measured on a 15-question content-anchored dataset over a 19-chunk corpus,
 hybrid retrieval (dense + BM25, RRF fused), top-5.
 
 | Metric | Score |
@@ -115,16 +115,27 @@ hybrid retrieval (dense + BM25, RRF fused), top-5.
 | Precision@5 | 0.23 |
 | Recall@5 | 1.00 |
 | Hit Rate | 1.00 |
-| MRR | 0.97 |
+| MRR | 1.00 |
 | Semantic Similarity | 0.47 |
 
 - **Recall = 1.0** — every relevant chunk is retrieved within the top-5.
-- **MRR = 0.97** — 14 of 15 questions rank a relevant chunk first. The exception is
-  the ACID question, where the heading-only chunk `## ACID Properties` outranks the
-  table that actually holds the answer.
+- **MRR = 1.0** — all 15 questions rank a relevant chunk first.
 - **Precision@5 is structurally capped.** With 1–2 relevant chunks per question and
   5 retrieved, the ceiling is 0.20–0.40; 0.23 is near it. Read Recall and MRR
   instead — Precision@K is a weak signal on a corpus this small.
+
+Measured progression, each step verified against the same content-anchored labels:
+
+| Change | Precision@5 | Recall@5 | MRR |
+|--------|------------|----------|-----|
+| Dense only, 500-char chunks | 0.20 | 1.00 | 1.00 |
+| Hybrid + heading-aware chunking | 0.23 | 1.00 | 0.97 |
+| \+ short-chunk merging | 0.23 | 1.00 | **1.00** |
+
+The dip at step 2 was a heading-only chunk (`## ACID Properties`) outranking the
+table holding the answer; step 3 merged it into its section and recovered rank 1.
+Step 1's MRR of 1.00 was measured over an 8-chunk corpus where top-5 retrieved 62%
+of everything — the same score over a corpus 2.4× larger is a stronger result.
 
 ---
 
