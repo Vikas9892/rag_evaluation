@@ -344,6 +344,7 @@ Seven Architecture Decision Records document the key technical choices:
 | [005](docs/decisions/005-provider-abstraction.md) | Abstractions | BaseGenerator/Parser/Reranker; testability rationale |
 | [006](docs/decisions/006-evaluation.md) | Evaluation | Separate retrieval vs generation metrics; LLM-as-judge |
 | [007](docs/decisions/007-lambda.md) | Deployment | Lambda vs Fargate; Mangum; HTTP API vs REST API |
+| [008](docs/decisions/008-frontend-architecture.md) | Frontend | Next.js App Router; generated API types; TanStack Query |
 
 ---
 
