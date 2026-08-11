@@ -5,7 +5,7 @@ from fastapi import HTTPException
 from config.logging_config import get_logger
 from generation.generator import GroqGenerator
 from generation.prompt_builder import PromptBuilder
-from retrieval.retriever import Retriever
+from retrieval.hybrid_retriever import HybridRetriever
 from services.rag_service import RAGService
 
 logger = get_logger(__name__)
@@ -15,7 +15,7 @@ logger = get_logger(__name__)
 def _build_service() -> RAGService:
     """Load all pipeline components exactly once per process lifetime."""
     logger.info("Loading RAG pipeline components...")
-    retriever = Retriever.from_disk()
+    retriever = HybridRetriever.from_disk()
     builder = PromptBuilder()
     generator = GroqGenerator()
     service = RAGService(retriever=retriever, generator=generator, builder=builder)

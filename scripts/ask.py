@@ -6,7 +6,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from config.settings import TOP_K
-from retrieval.retriever import Retriever
+from retrieval.hybrid_retriever import HybridRetriever
 from generation.prompt_builder import PromptBuilder
 from generation.generator import GroqGenerator
 
@@ -39,7 +39,7 @@ def _display_answer(response, retrieval_ms: float) -> None:
 
 def main() -> None:
     print("Loading pipeline...", end=" ", flush=True)
-    retriever = Retriever.from_disk()
+    retriever = HybridRetriever.from_disk()
     generator = GroqGenerator()
     builder = PromptBuilder()
     print("ready.\n")

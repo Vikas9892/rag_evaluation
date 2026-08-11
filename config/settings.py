@@ -12,9 +12,11 @@ SUPPORTED_EXTENSIONS = {".pdf", ".txt", ".md", ".markdown"}
 EMBEDDING_MODEL = "BAAI/bge-small-en-v1.5"
 BATCH_SIZE = 32
 DEVICE = "cpu"
-CHUNK_SIZE = 500
-CHUNK_OVERLAP = 100
-SEPARATORS = ["\n\n", "\n", ". ", " ", ""]
+CHUNK_SIZE = 250
+CHUNK_OVERLAP = 50
+# Heading separators come first so a chunk aligns to one concept rather than
+# straddling several sections; paragraph/sentence/word fallbacks follow.
+SEPARATORS = ["\n## ", "\n### ", "\n\n", "\n", ". ", " ", ""]
 TOP_K = 5
 
 VECTORS_FILE = INDEX_DIR / "vectors.npy"

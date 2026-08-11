@@ -14,10 +14,12 @@ logger = get_logger(__name__)
 class DocumentSplitter:
     """Splits a Document into a list of Chunk objects using recursive character splitting.
 
-    The splitter tries separators in order (\n\n → \n → ". " → " " → "") so
-    chunks align to paragraph/sentence/word boundaries before falling back to
-    raw character slicing.  Overlap ensures context is preserved across chunk
-    boundaries.
+    The splitter tries separators in order (\n##  → \n###  → \n\n → \n → ". "
+    → " " → "") so chunks align to heading, then paragraph/sentence/word
+    boundaries before falling back to raw character slicing.  Splitting on
+    headings first keeps one chunk to one concept, which sharpens retrieval:
+    a chunk covering five sections matches every query about any of them.
+    Overlap ensures context is preserved across chunk boundaries.
     """
 
     def __init__(
