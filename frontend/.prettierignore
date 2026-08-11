@@ -1,0 +1,6 @@
+.next
+node_modules
+coverage
+public
+# Generated from the FastAPI OpenAPI schema — never hand-edited, never reformatted.
+types/api.generated.ts

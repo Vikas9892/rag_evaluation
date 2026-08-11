@@ -256,8 +256,42 @@ pytest tests/test_api.py -v
 pytest tests/test_hybrid_retriever.py -v
 ```
 
-**Coverage: 87%** across 289 tests.  The uncovered lines are real-API paths
+**Coverage: 87%** across 324 tests.  The uncovered lines are real-API paths
 (GroqGenerator, RAGService.answer) that require a live GROQ_API_KEY.
+
+---
+
+## Frontend
+
+A Next.js dashboard lives in [`frontend/`](frontend/).  Architecture and the
+reasoning behind it: [ADR 008](docs/decisions/008-frontend-architecture.md) and
+[docs/frontend_architecture.md](docs/frontend_architecture.md).
+
+```bash
+cd frontend
+npm install
+cp .env.example .env.local     # NEXT_PUBLIC_API_URL, defaults to localhost:8000
+npm run dev                    # http://localhost:3000
+```
+
+| Command | Does |
+|---------|------|
+| `npm run verify` | typecheck + lint + format check + tests — the full gate |
+| `npm run gen:api` | regenerate `types/api.generated.ts` from the running backend |
+| `npm run test` | Vitest + React Testing Library |
+| `npm run build` | production build |
+
+**Stack:** Next.js 16 (App Router) · React 19 · TypeScript · Tailwind 4 ·
+shadcn/ui · TanStack Query · Vitest.
+
+Two conventions are enforced rather than documented:
+
+- **Only `services/` may touch the network.**  An ESLint rule bans `fetch`
+  everywhere else, so a component cannot quietly acquire a network dependency
+  that makes it untestable.
+- **API types are generated, never hand-written.**  `npm run gen:api` reads the
+  backend's OpenAPI schema, so a backend change becomes a TypeScript error at the
+  call site instead of a wrong number on a dashboard.
 
 ---
 
