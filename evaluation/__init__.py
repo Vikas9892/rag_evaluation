@@ -1,6 +1,7 @@
 from .benchmark import BenchmarkResult, BenchmarkRunner, ExperimentRunner
 from .dataset import BenchmarkSample, DatasetLoader
 from .generation_evaluator import GenerationAggregateResult, GenerationEvaluator, GenerationSampleResult
+from .ground_truth import ChunkResolver, GroundTruthError
 from .metrics import (
     cosine_similarity,
     hit_rate,
@@ -16,6 +17,7 @@ __all__ = [
     "BenchmarkResult", "BenchmarkRunner", "ExperimentRunner",
     "BenchmarkSample", "DatasetLoader",
     "GenerationAggregateResult", "GenerationEvaluator", "GenerationSampleResult",
+    "ChunkResolver", "GroundTruthError",
     "cosine_similarity", "hit_rate", "mean_reciprocal_rank",
     "precision_at_k", "recall_at_k", "reciprocal_rank",
     "ReportGenerator",

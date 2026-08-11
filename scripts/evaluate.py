@@ -15,6 +15,7 @@ from retrieval.retriever import Retriever
 
 from evaluation.benchmark import BenchmarkRunner
 from evaluation.dataset import DatasetLoader
+from evaluation.ground_truth import ChunkResolver
 from evaluation.report import ReportGenerator
 
 logger = get_logger(__name__)
@@ -34,7 +35,9 @@ def _build_generator():
 
 def main() -> None:
     print("Loading pipeline...", end=" ", flush=True)
-    dataset = DatasetLoader.load()
+    # Ground truth is resolved against the live index, so a stale label fails
+    # loudly here instead of silently corrupting the metrics.
+    dataset = DatasetLoader.load(resolver=ChunkResolver.from_disk())
     retriever = Retriever.from_disk()
     embedder = Embedder()
     builder = PromptBuilder()

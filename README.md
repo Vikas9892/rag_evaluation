@@ -85,22 +85,46 @@ export GROQ_API_KEY=gsk_...
 python scripts/evaluate.py
 ```
 
+### Ground Truth
+
+Labels are anchored to **content**, not to positional chunk IDs:
+
+```json
+{ "id": 13,
+  "question": "What are common page replacement algorithms?",
+  "expected_answer_spans": ["LRU (Least Recently Used)"] }
+```
+
+`ChunkResolver` resolves each span against the live index at evaluation time, and
+every span must match **exactly one** chunk — zero matches means the label is
+stale, several means it is not discriminative. Both fail the build.
+
+This exists because positional IDs (`os.md_chunk_0001`) are a function of chunk
+size, overlap, and separators. Re-chunking silently re-points them at different
+text: no error, no test failure, wrong metrics. Changing `CHUNK_SIZE` 500 → 250
+once moved MRR from 1.000 to 0.143 that way. A question may carry several spans
+when its answer genuinely spans multiple chunks; the relevant set is their union.
+
 ### Evaluation Results
 
-Measured on a 15-question ground-truth dataset built from the indexed documents.
+Measured on a 15-question content-anchored dataset over a 23-chunk corpus,
+hybrid retrieval (dense + BM25, RRF fused), top-5.
 
 | Metric | Score |
 |--------|-------|
-| Precision@5 | 0.20 |
+| Precision@5 | 0.23 |
 | Recall@5 | 1.00 |
 | Hit Rate | 1.00 |
-| MRR | 1.00 |
+| MRR | 0.97 |
 | Semantic Similarity | 0.47 |
 
-- **MRR = 1.0** — the relevant chunk is always ranked first.
 - **Recall = 1.0** — every relevant chunk is retrieved within the top-5.
-- **Precision@5 = 0.20** is expected: there is exactly 1 relevant chunk per question
-  and 5 are retrieved (1/5 = 0.20).
+- **MRR = 0.97** — 14 of 15 questions rank a relevant chunk first. The exception is
+  the ACID question, where the heading-only chunk `## ACID Properties` outranks the
+  table that actually holds the answer.
+- **Precision@5 is structurally capped.** With 1–2 relevant chunks per question and
+  5 retrieved, the ceiling is 0.20–0.40; 0.23 is near it. Read Recall and MRR
+  instead — Precision@K is a weak signal on a corpus this small.
 
 ---
 

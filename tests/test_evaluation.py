@@ -157,7 +157,12 @@ class TestDatasetLoader:
             DatasetLoader.load(p)
 
     def test_real_dataset_loads(self):
-        samples = DatasetLoader.load()
+        # The shipped dataset is content-anchored, so loading it requires a
+        # resolver bound to the live index. Integrity of those labels is
+        # covered in tests/test_ground_truth.py.
+        from evaluation.ground_truth import ChunkResolver
+
+        samples = DatasetLoader.load(resolver=ChunkResolver.from_disk())
         assert len(samples) == 15
         assert all(s.expected_chunk_ids for s in samples)
 

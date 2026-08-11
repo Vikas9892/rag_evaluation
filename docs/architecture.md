@@ -200,9 +200,37 @@ aws/
 
 evaluation/
   └── metrics.py (pure functions)
-  └── dataset.py
+  └── ground_truth.py       (ChunkResolver: content span -> chunk_id)
+  └── dataset.py            (DatasetLoader, resolver injected)
   └── retrieval_evaluator.py
   └── generation_evaluator.py
   └── benchmark.py
   └── report.py
 ```
+
+### Ground-truth resolution
+
+Labels are authored as content spans and bound to chunk IDs at evaluation time,
+so re-chunking cannot silently invalidate them.
+
+```
+dataset.json                index/metadata.json
+"expected_answer_spans"           │
+        │                         │
+        └──────► ChunkResolver ◄──┘
+                      │
+              exactly 1 match?
+                 │        │
+               yes        no ──► GroundTruthError  (stale or ambiguous label)
+                 │
+                 ▼
+        BenchmarkSample.expected_chunk_ids
+                 │
+                 ▼
+          RetrievalEvaluator ──► Precision@K · Recall · MRR · Hit Rate
+```
+
+`DatasetLoader` takes the resolver as a constructor-style argument rather than
+building one itself: unit tests inject an in-memory resolver (or use the legacy
+literal-ID form) and never need an index on disk, while `scripts/evaluate.py`
+injects `ChunkResolver.from_disk()` and fails loudly on any stale label.
