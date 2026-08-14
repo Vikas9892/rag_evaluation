@@ -132,8 +132,36 @@ keeps 90% of the Python suite offline (ADR 005).
 `NEXT_PUBLIC_*` variables are inlined into the client bundle and are public by definition.
 Nothing secret may ever use that prefix.
 
-## Known blocker for Milestone 3
+## CORS
 
-`api/app.py` registers no CORS middleware, so the first browser request will fail the
-preflight check.  Adding `CORSMiddleware` with an explicit origin allowlist — not `*` —
-is the first task of the API-integration milestone.
+Resolved.  `api/app.py` registers `CORSMiddleware` with an explicit allowlist from
+`ALLOWED_ORIGINS` (default `http://localhost:3000`), `allow_credentials=False`, and only
+the verbs the client issues (`GET`, `POST`, `OPTIONS`).  `*` is accepted as an operator
+override but logs a warning: a wildcard on an endpoint that spends Groq budget lets any
+page on the internet spend it.
+
+## Error taxonomy
+
+`services/api-error.ts` maps every failure to a kind, because the UI needs two answers a
+status code alone cannot give: what to tell the user, and whether retrying can help.
+
+| Kind | Source | Retryable | Why |
+|------|--------|-----------|-----|
+| `network` | fetch rejected, not aborted | ✅ | transient connectivity |
+| `timeout` | deadline exceeded, or 504 | ✅ | may succeed when load drops |
+| `cancelled` | caller aborted | ❌ | not a failure; never shown as one |
+| `bad_request` | 400, 422 | ❌ | the request itself is wrong |
+| `not_found` | 404 | ❌ | |
+| `rate_limited` | 429 | ✅ | resolves by waiting |
+| `unavailable` | 503 | ❌ | unbuilt index or missing key — does not self-heal |
+| `server` | 5xx | ✅ | may be transient |
+| `parse` | body was not the expected shape | ❌ | retrying returns the same body |
+
+`unavailable` being non-retryable is deliberate and mirrors
+`GroqGenerator._call_with_retry` on the backend, which retries rate limits and connection
+errors but fails fast on auth and bad requests.  Retrying a 503 three times only delays
+telling the user the index is not built.
+
+Classification reads `signal.aborted` and `signal.reason` rather than sniffing the thrown
+exception: Node and browsers disagree on whether an aborted fetch throws `TimeoutError`,
+`AbortError`, or a `TypeError` wrapping either, but the signal's state is specified.

@@ -107,7 +107,7 @@ when its answer genuinely spans multiple chunks; the relevant set is their union
 
 ### Evaluation Results
 
-Measured on a 15-question content-anchored dataset over a 19-chunk corpus,
+Measured on a 15-question content-anchored dataset over a 23-chunk corpus,
 hybrid retrieval (dense + BM25, RRF fused), top-5.
 
 | Metric | Score |
@@ -115,27 +115,16 @@ hybrid retrieval (dense + BM25, RRF fused), top-5.
 | Precision@5 | 0.23 |
 | Recall@5 | 1.00 |
 | Hit Rate | 1.00 |
-| MRR | 1.00 |
+| MRR | 0.97 |
 | Semantic Similarity | 0.47 |
 
 - **Recall = 1.0** — every relevant chunk is retrieved within the top-5.
-- **MRR = 1.0** — all 15 questions rank a relevant chunk first.
+- **MRR = 0.97** — 14 of 15 questions rank a relevant chunk first. The exception is
+  the ACID question, where the heading-only chunk `## ACID Properties` outranks the
+  table that actually holds the answer.
 - **Precision@5 is structurally capped.** With 1–2 relevant chunks per question and
   5 retrieved, the ceiling is 0.20–0.40; 0.23 is near it. Read Recall and MRR
   instead — Precision@K is a weak signal on a corpus this small.
-
-Measured progression, each step verified against the same content-anchored labels:
-
-| Change | Precision@5 | Recall@5 | MRR |
-|--------|------------|----------|-----|
-| Dense only, 500-char chunks | 0.20 | 1.00 | 1.00 |
-| Hybrid + heading-aware chunking | 0.23 | 1.00 | 0.97 |
-| \+ short-chunk merging | 0.23 | 1.00 | **1.00** |
-
-The dip at step 2 was a heading-only chunk (`## ACID Properties`) outranking the
-table holding the answer; step 3 merged it into its section and recovered rank 1.
-Step 1's MRR of 1.00 was measured over an 8-chunk corpus where top-5 retrieved 62%
-of everything — the same score over a corpus 2.4× larger is a stronger result.
 
 ---
 
@@ -256,42 +245,8 @@ pytest tests/test_api.py -v
 pytest tests/test_hybrid_retriever.py -v
 ```
 
-**Coverage: 87%** across 324 tests.  The uncovered lines are real-API paths
+**Coverage: 87%** across 289 tests.  The uncovered lines are real-API paths
 (GroqGenerator, RAGService.answer) that require a live GROQ_API_KEY.
-
----
-
-## Frontend
-
-A Next.js dashboard lives in [`frontend/`](frontend/).  Architecture and the
-reasoning behind it: [ADR 008](docs/decisions/008-frontend-architecture.md) and
-[docs/frontend_architecture.md](docs/frontend_architecture.md).
-
-```bash
-cd frontend
-npm install
-cp .env.example .env.local     # NEXT_PUBLIC_API_URL, defaults to localhost:8000
-npm run dev                    # http://localhost:3000
-```
-
-| Command | Does |
-|---------|------|
-| `npm run verify` | typecheck + lint + format check + tests — the full gate |
-| `npm run gen:api` | regenerate `types/api.generated.ts` from the running backend |
-| `npm run test` | Vitest + React Testing Library |
-| `npm run build` | production build |
-
-**Stack:** Next.js 16 (App Router) · React 19 · TypeScript · Tailwind 4 ·
-shadcn/ui · TanStack Query · Vitest.
-
-Two conventions are enforced rather than documented:
-
-- **Only `services/` may touch the network.**  An ESLint rule bans `fetch`
-  everywhere else, so a component cannot quietly acquire a network dependency
-  that makes it untestable.
-- **API types are generated, never hand-written.**  `npm run gen:api` reads the
-  backend's OpenAPI schema, so a backend change becomes a TypeScript error at the
-  call site instead of a wrong number on a dashboard.
 
 ---
 
@@ -378,7 +333,6 @@ Seven Architecture Decision Records document the key technical choices:
 | [005](docs/decisions/005-provider-abstraction.md) | Abstractions | BaseGenerator/Parser/Reranker; testability rationale |
 | [006](docs/decisions/006-evaluation.md) | Evaluation | Separate retrieval vs generation metrics; LLM-as-judge |
 | [007](docs/decisions/007-lambda.md) | Deployment | Lambda vs Fargate; Mangum; HTTP API vs REST API |
-| [008](docs/decisions/008-frontend-architecture.md) | Frontend | Next.js App Router; generated API types; TanStack Query |
 
 ---
 
