@@ -18,10 +18,7 @@ import { ApiError, kindForStatus } from "./api-error";
 const DEFAULT_TIMEOUT_MS = 30_000;
 
 export function apiBaseUrl(): string {
-  return (process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000").replace(
-    /\/+$/,
-    "",
-  );
+  return (process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000").replace(/\/+$/, "");
 }
 
 /** Pull FastAPI's `detail` out of an error body without assuming it is there. */
@@ -158,9 +155,7 @@ export async function* streamQuery(
     response = await fetch(`${apiBaseUrl()}/stream`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(
-        topK === undefined ? { question } : { question, top_k: topK },
-      ),
+      body: JSON.stringify(topK === undefined ? { question } : { question, top_k: topK }),
       signal,
     });
   } catch (cause) {

@@ -32,8 +32,8 @@ export default function AboutPage() {
           <p className="text-muted-foreground">
             An engineering platform for building, evaluating and benchmarking
             Retrieval-Augmented Generation systems &mdash; not a chatbot. A chatbot
-            answers questions; this answers whether the retrieval behind those
-            answers is any good, and how you know.
+            answers questions; this answers whether the retrieval behind those answers is
+            any good, and how you know.
           </p>
         </section>
 
@@ -63,37 +63,37 @@ export default function AboutPage() {
             ))}
           </dl>
           <p className="text-muted-foreground mt-3">
-            Measured over a 15-question labelled dataset against a 19-chunk corpus
-            with hybrid retrieval at top-5. Precision@5 is structurally capped
-            near 0.20&ndash;0.40 here, because each question has one or two relevant
-            chunks and five are retrieved &mdash; read Recall and MRR instead.
-            MRR of 1.00 over a corpus this small measures the corpus as much as
-            the retriever.
+            Measured over a 15-question labelled dataset against a 19-chunk corpus with
+            hybrid retrieval at top-5. Precision@5 is structurally capped near
+            0.20&ndash;0.40 here, because each question has one or two relevant chunks and
+            five are retrieved &mdash; read Recall and MRR instead. MRR of 1.00 over a
+            corpus this small measures the corpus as much as the retriever.
           </p>
         </section>
 
         <section>
-          <h2 className="mb-2 text-base font-semibold">Why accuracy metrics are not on the Query page</h2>
+          <h2 className="mb-2 text-base font-semibold">
+            Why accuracy metrics are not on the Query page
+          </h2>
           <p className="text-muted-foreground">
-            Precision, Recall and MRR are undefined without ground truth, and a
-            question typed a second ago has none. The Query page therefore shows
-            only what is directly observable &mdash; scores, latency, tokens,
-            whether dense and sparse agreed &mdash; while accuracy lives on the
-            Evaluation page, over the labelled dataset. Any Precision@5 rendered
-            next to an ad-hoc answer would be fabricated.
+            Precision, Recall and MRR are undefined without ground truth, and a question
+            typed a second ago has none. The Query page therefore shows only what is
+            directly observable &mdash; scores, latency, tokens, whether dense and sparse
+            agreed &mdash; while accuracy lives on the Evaluation page, over the labelled
+            dataset. Any Precision@5 rendered next to an ad-hoc answer would be
+            fabricated.
           </p>
         </section>
 
         <section>
           <h2 className="mb-2 text-base font-semibold">Ground truth</h2>
           <p className="text-muted-foreground">
-            Evaluation labels are anchored to content spans, not to chunk IDs.
-            Chunk IDs are a function of chunk size and separators, so re-chunking
-            silently re-points every label at different text &mdash; once moving
-            MRR from 1.000 to 0.143 with no error raised anywhere. Each span is
-            now resolved against the live index at evaluation time and must match
-            exactly one chunk, so a stale label fails the build instead of
-            corrupting a number.
+            Evaluation labels are anchored to content spans, not to chunk IDs. Chunk IDs
+            are a function of chunk size and separators, so re-chunking silently re-points
+            every label at different text &mdash; once moving MRR from 1.000 to 0.143 with
+            no error raised anywhere. Each span is now resolved against the live index at
+            evaluation time and must match exactly one chunk, so a stale label fails the
+            build instead of corrupting a number.
           </p>
         </section>
       </div>

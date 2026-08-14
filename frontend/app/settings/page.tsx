@@ -11,9 +11,9 @@ export default function SettingsPage() {
     <>
       <PageHeader title={title} description={description} />
       <PendingPanel milestone="Milestone 8">
-        Top-K, retriever choice and the reranker toggle. These are stored in the
-        URL rather than component state, so a result stays reproducible and
-        shareable: <code>/query?q=…&amp;top_k=10&amp;retriever=hybrid</code>.
+        Top-K, retriever choice and the reranker toggle. These are stored in the URL
+        rather than component state, so a result stays reproducible and shareable:{" "}
+        <code>/query?q=…&amp;top_k=10&amp;retriever=hybrid</code>.
       </PendingPanel>
     </>
   );

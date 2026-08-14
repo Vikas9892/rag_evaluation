@@ -32,15 +32,13 @@ export const ROUTES: readonly AppRoute[] = [
   {
     href: "/query",
     label: "Query",
-    description:
-      "Ask a question and inspect the retrieval trace behind the answer.",
+    description: "Ask a question and inspect the retrieval trace behind the answer.",
     icon: Search,
   },
   {
     href: "/evaluation",
     label: "Evaluation",
-    description:
-      "Precision@K, Recall and MRR measured over the labelled dataset.",
+    description: "Precision@K, Recall and MRR measured over the labelled dataset.",
     icon: FlaskConical,
   },
   {

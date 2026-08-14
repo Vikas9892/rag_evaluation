@@ -15,10 +15,9 @@ export default function OverviewPage() {
 
       <PendingPanel milestone="Milestone 6">
         Backend health, corpus size and the last benchmark summary, read from{" "}
-        <code>GET /health</code> and <code>GET /metrics</code>. Nothing is shown
-        until those calls are real: a hardcoded status badge is
-        indistinguishable from a measured one, and would be wrong exactly when
-        it matters.
+        <code>GET /health</code> and <code>GET /metrics</code>. Nothing is shown until
+        those calls are real: a hardcoded status badge is indistinguishable from a
+        measured one, and would be wrong exactly when it matters.
       </PendingPanel>
 
       <nav aria-label="Sections" className="mt-6 grid gap-3 sm:grid-cols-2">

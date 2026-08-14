@@ -36,7 +36,9 @@ describe("apiBaseUrl", () => {
 
 describe("getHealth", () => {
   it("returns the parsed body", async () => {
-    server.use(http.get(`${BASE}/health`, () => HttpResponse.json({ status: "healthy" })));
+    server.use(
+      http.get(`${BASE}/health`, () => HttpResponse.json({ status: "healthy" })),
+    );
     await expect(getHealth()).resolves.toEqual({ status: "healthy" });
   });
 
@@ -117,9 +119,7 @@ describe("error mapping", () => {
 
   for (const { status, kind, retryable } of cases) {
     it(`maps ${status} to "${kind}" (retryable: ${retryable})`, async () => {
-      server.use(
-        http.get(`${BASE}/health`, () => new HttpResponse(null, { status })),
-      );
+      server.use(http.get(`${BASE}/health`, () => new HttpResponse(null, { status })));
       const error = await expectApiError(getHealth());
       expect(error.kind).toBe(kind);
       expect(error.status).toBe(status);
