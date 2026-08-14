@@ -35,5 +35,11 @@ REQUEST_TIMEOUT = 30.0
 MAX_RETRIES = 3
 MAX_CONTEXT_CHUNKS = 5
 
+# Browser origins allowed to call the API. The frontend calls FastAPI directly
+# (ADR 008), so this is the only thing standing between a public endpoint that
+# spends Groq budget and any page on the internet. Comma-separated; override
+# with the ALLOWED_ORIGINS environment variable in deployment.
+DEFAULT_ALLOWED_ORIGINS = ["http://localhost:3000"]
+
 REPORTS_DIR = BASE_DIR / "reports"
 DATASET_PATH = BASE_DIR / "evaluation" / "dataset.json"

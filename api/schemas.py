@@ -53,6 +53,39 @@ class SourceInfo(BaseModel):
     score: float = Field(description="Cosine-similarity score in [0, 1]")
 
 
+class HealthResponse(BaseModel):
+    """Liveness payload.
+
+    Declared as a model rather than a bare dict so the OpenAPI schema carries a
+    real shape: the frontend's TypeScript types are generated from it, and an
+    untyped dict generates a type that says nothing.
+    """
+
+    model_config = ConfigDict(json_schema_extra={"example": {"status": "healthy"}})
+
+    status: str = Field(description="Always 'healthy' while the process is serving")
+
+
+class MetricsResponse(BaseModel):
+    """Per-container counters accumulated since cold start."""
+
+    model_config = ConfigDict(
+        json_schema_extra={
+            "example": {
+                "total_queries": 42,
+                "avg_retrieval_ms": 36.2,
+                "avg_generation_ms": 447.3,
+                "errors": 0,
+            }
+        }
+    )
+
+    total_queries: int = Field(description="Queries answered since cold start")
+    avg_retrieval_ms: float = Field(description="Mean retrieval latency (ms)")
+    avg_generation_ms: float = Field(description="Mean LLM generation latency (ms)")
+    errors: int = Field(description="Queries that raised before returning")
+
+
 class QueryResponse(BaseModel):
     model_config = ConfigDict(json_schema_extra={"example": _RESPONSE_EXAMPLE})
 
