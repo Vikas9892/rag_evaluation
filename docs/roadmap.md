@@ -44,7 +44,7 @@ wrong was the alternative.
 |---|---|---|---|
 | 3 | Next.js · TypeScript · Tailwind · shadcn/ui · TanStack Query · ESLint · Prettier | ✅ | `a6a261a` |
 | 4 | Layout + six routes (`/`, query, evaluation, benchmarks, settings, about) | ✅ | `4f0c4d9` |
-| 5 | Shared components — Card, Spinner, Skeleton, Toast, Error Boundary | ⬜ | only `components/ui/button.tsx` exists |
+| 5 | Shared components — Card, Spinner, Skeleton, Toast, Error Boundary | ✅ | `e7d7822`, `45f6653` |
 
 **Milestone 5 was deliberately deferred past Milestone 6.** Built in the
 abstract it would guess at loading/error/empty states; built after the API
@@ -56,7 +56,7 @@ timeouts. The error taxonomy in Phase 3 now gives each component concrete cases.
 | # | Milestone | Status | Evidence |
 |---|---|---|---|
 | 6 | `services/api.ts` — typed client for `POST /query`, `POST /stream`, `GET /health`, `GET /metrics` | ✅ | `4f0c4d9`, `7f7ce4c` |
-| 7 | Error handling — retry, loading, empty state, network failure, timeout | 🟡 | client layer done; UI states await M5 |
+| 7 | Error handling — retry, loading, empty state, network failure, timeout | ✅ | `45f6653` — components and policy exist; first consumer lands with M8 |
 
 Milestone 6 also required backend changes: `/health` and `/metrics` returned
 bare `dict`, so FastAPI emitted an empty schema and `openapi-typescript`
@@ -76,9 +76,15 @@ self-heals; retrying only delays telling the user what is actually wrong.
 `cancelled` exists because a caller abort — navigation, a superseded query — is
 not a failure and must never render as one.
 
-**What remains in M7** is the UI half: rendering those kinds as loading,
-empty and error surfaces. That is M5's component set, which is why the two are
-coupled.
+The UI half landed with M5, since the two are the same work. `ErrorState` maps
+each kind to copy through a total `Record`, so adding a kind to the taxonomy
+fails to compile until someone decides what the user should be told about it.
+`cancelled` maps to `null` — an aborted request is not a failure — and the
+server's `detail` is surfaced only where it is actionable, never for a 5xx.
+
+The `QueryClient` default now consults `ApiError.retryable` rather than retrying
+everything once, so the policy lives in one place instead of being restated per
+hook. No page consumes these yet; the first real consumer is M8.
 
 ## Phase 4 — Query experience
 
@@ -178,10 +184,10 @@ These were raised before Milestone 2 and are still unanswered:
 
 ## Suggested next step
 
-**Milestone 5 + the UI half of Milestone 7**, together. They are the same work:
-the error taxonomy already enumerates the states, the components render them,
-and M8's query page then has real loading/error primitives to build on instead
-of inventing them inline.
+**Milestone 8 — the question input.** Phase 2 and 3 are now complete, so the
+query page has real loading, error and empty primitives to build on rather than
+inventing them inline, and `postQuery` has been sitting implemented and tested
+since M6 with no consumer.
 
 M11 and M15 should not be attempted before their blockers clear — the backend
 score contract and the corpus, respectively.

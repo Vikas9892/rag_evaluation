@@ -1,10 +1,11 @@
 # Frontend Architecture
 
-**Status:** Milestone 2 — design only, no code yet
+**Status:** built through Milestone 7 — see [roadmap](roadmap.md) for what remains
 **Decisions:** [ADR 008](decisions/008-frontend-architecture.md)
 
-The structure below is documented now and created in Milestone 3 by `create-next-app`.
-Directories are not pre-created, because the generator owns the initial tree.
+This document was written in Milestone 2 as a design, before the tree existed. The
+structure below now describes the code as built; where the two ever disagree, the code
+is wrong or this file is stale, and one of them gets fixed.
 
 ---
 
@@ -165,3 +166,25 @@ telling the user the index is not built.
 Classification reads `signal.aborted` and `signal.reason` rather than sniffing the thrown
 exception: Node and browsers disagree on whether an aborted fetch throws `TimeoutError`,
 `AbortError`, or a `TypeError` wrapping either, but the signal's state is specified.
+
+## Rendering a failure
+
+| Situation | Component | Why |
+|---|---|---|
+| A request failed | `ErrorState` | the failure is data; the page stays mounted and keeps its retry affordance |
+| A request was cancelled | nothing | not a failure — the user navigated away or superseded the query |
+| Zero results | `EmptyState` | a valid answer; retrying returns zero again |
+| A component threw while rendering | `ErrorBoundary` | a bug, not a response — React catches only what render throws |
+
+The boundary and the error state are not interchangeable. A rejected fetch settles outside
+render and never reaches a boundary, and a boundary unmounts its subtree, which would take
+the retry button with it. `ErrorBoundary` takes `resetKeys` — usually the pathname — because
+one that caught an error on one route would otherwise stay broken on the next.
+
+`ErrorState` maps kinds to copy through a total `Record`, so a new kind fails to compile
+until its copy exists. The server's `detail` is rendered only where it is written for a
+user and is actionable (422 validation, 503 unbuilt index); a 5xx gets fixed copy, because
+its detail can carry internals that belong in a log.
+
+Retry policy lives once, on the `QueryClient` default, which consults `ApiError.retryable`.
+A hook overrides it only when it has a reason to.
