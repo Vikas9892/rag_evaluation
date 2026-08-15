@@ -48,6 +48,20 @@ jobs:
       - name: Install dependencies
         run: pip install -r requirements.txt
 
+      # The index is a build artefact, not source, so it is gitignored and a
+      # fresh checkout has none. It still has to exist here: the ground-truth
+      # integrity tests assert that every label in the shipped dataset resolves
+      # to exactly one chunk of the *real* index, which is the invariant that
+      # caught labels silently re-pointing when chunking changed (MRR 1.000 ->
+      # 0.143, every test still green). Asserting it against a fixture would
+      # test the fixture.
+      - name: Build the index
+        run: |
+          python scripts/build_embeddings.py
+          python scripts/build_index.py
+        env:
+          PYTHONPATH: .
+
       - name: Run tests with coverage
         run: |
           python -m pytest \
