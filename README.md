@@ -21,7 +21,7 @@ benchmarked, and deployable to AWS Lambda in one command.
 | LLM | Groq / llama-3.1-8b-instant | < 2 s TTFT, free tier for evaluation |
 | API | FastAPI + Mangum | Async, auto-OpenAPI docs, Lambda-compatible |
 | Deployment | AWS Lambda + HTTP API Gateway | Scale-to-zero, no ops overhead |
-| CI | GitHub Actions | Every PR runs 289 tests across Python 3.11 + 3.12 |
+| CI | GitHub Actions | Builds the index, then runs the suite on Python 3.11 + 3.12 |
 
 ---
 
@@ -32,7 +32,7 @@ Documents (.pdf .txt .md)
          │
     BaseParser (PyMuPDF / plain-text)
          │
-    DocumentSplitter (RecursiveChar, 500 chars, 100 overlap)
+    DocumentSplitter (heading-aware, 250 chars, 50 overlap)
          │
     Embedder (bge-small-en-v1.5, L2-normalised)
          │
@@ -45,7 +45,7 @@ vectors.npy  faiss.index          ← offline ingestion
          ▼
      Retriever
   ┌──────┴──────────┐
-  │ FAISS (dense)   │  + BM25 (sparse) → RRF → CrossEncoder (optional)
+  │ FAISS (dense)   │  + BM25 (sparse) → RRF → CrossEncoder (opt-in)
   └──────┬──────────┘
          │ RetrievalResult list
          ▼
@@ -75,10 +75,10 @@ open blockers.
 
 ```bash
 # Parse and chunk documents
-python scripts/chunk_documents.py
+python scripts/build_embeddings.py
 
-# Embed chunks and build FAISS index
-python scripts/embed_chunks.py
+# Build the FAISS index from the stored vectors
+python scripts/build_index.py
 ```
 
 ### Evaluation
@@ -112,24 +112,30 @@ when its answer genuinely spans multiple chunks; the relevant set is their union
 
 ### Evaluation Results
 
-Measured on a 15-question content-anchored dataset over a 23-chunk corpus,
-hybrid retrieval (dense + BM25, RRF fused), top-5.
+Measured over **53 labelled questions** against a **148-chunk corpus**, swept
+across 18 configurations (retriever × top-K × reranker).
 
-| Metric | Score |
-|--------|-------|
-| Precision@5 | 0.23 |
-| Recall@5 | 1.00 |
-| Hit Rate | 1.00 |
-| MRR | 0.97 |
-| Semantic Similarity | 0.47 |
+| Configuration | Precision@5 | Recall@5 | MRR | Hit rate |
+|---|---|---|---|---|
+| dense · reranked | 0.204 | 0.981 | **0.913** | 0.981 |
+| dense | 0.200 | 0.962 | 0.878 | 0.962 |
+| hybrid | 0.193 | 0.934 | 0.848 | 0.943 |
+| sparse | 0.166 | 0.811 | 0.715 | 0.830 |
 
-- **Recall = 1.0** — every relevant chunk is retrieved within the top-5.
-- **MRR = 0.97** — 14 of 15 questions rank a relevant chunk first. The exception is
-  the ACID question, where the heading-only chunk `## ACID Properties` outranks the
-  table that actually holds the answer.
-- **Precision@5 is structurally capped.** With 1–2 relevant chunks per question and
-  5 retrieved, the ceiling is 0.20–0.40; 0.23 is near it. Read Recall and MRR
-  instead — Precision@K is a weak signal on a corpus this small.
+Two results worth stating plainly:
+
+- **Dense beats hybrid at every top-K.** RRF gives each retriever an equal vote,
+  so fusing with a weaker one drags the ranking below its own better half. The
+  default was changed from hybrid to dense because of this.
+- **Reranking is the larger lever** — it lifts sparse by 0.173 — but costs
+  hundreds of milliseconds against a 300–600 ms generation step, so it stays
+  opt-in.
+
+**Precision@K is structurally capped.** With one to two relevant chunks per
+question and K retrieved, the ceiling is roughly 1/K. Read Recall and MRR.
+
+Full matrix, method and caveats: [docs/benchmark_report.md](docs/benchmark_report.md).
+Regenerate any time with `GET /benchmarks`.
 
 ---
 
@@ -250,8 +256,8 @@ pytest tests/test_api.py -v
 pytest tests/test_hybrid_retriever.py -v
 ```
 
-**Coverage: 87%** across 289 tests.  The uncovered lines are real-API paths
-(GroqGenerator, RAGService.answer) that require a live GROQ_API_KEY.
+Coverage is gated at 85% in CI and currently sits above 90%. The uncovered
+lines are real-API paths (GroqGenerator) that require a live GROQ_API_KEY.
 
 ---
 
@@ -313,7 +319,7 @@ rag_evaluation/
 ├── aws/                  # Mangum handler, SAM template
 ├── evaluation/           # Metrics, BenchmarkRunner, ReportGenerator
 ├── scripts/              # Ingestion, evaluation, benchmark CLI scripts
-├── tests/                # 289 tests, 87% coverage
+├── tests/                # unit, contract and API tests; 85% coverage gate
 ├── load_tests/           # Locust load test scenarios
 ├── docs/
 │   ├── architecture.md   # System diagrams

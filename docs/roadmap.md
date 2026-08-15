@@ -266,23 +266,34 @@ These were raised before Milestone 2 and are still unanswered:
 3. **Dataset size.** ~50 questions was proposed to make benchmark comparisons
    less noisy.
 
+## Status
+
+Every milestone from 0 to 20 is built, no page shows a placeholder, and the three
+open decisions are closed:
+
+1. **Default retriever: dense.** Measured over 53 questions and 18
+   configurations, dense beats hybrid at every top-K. RRF gives each retriever an
+   equal vote, so fusing with a weaker one drags the ranking below its own better
+   half.
+2. **Corpus: 148 chunks over 8 documents, 53 labelled questions** (from 19 / 3 /
+   15). Large enough that the matrix discriminates and BM25's IDF is no longer
+   degenerate.
+3. **Reranker: wired, opt-in, and swept.** It is the largest single lever — it
+   lifts sparse retrieval by 0.173 MRR — but costs hundreds of milliseconds
+   against a 300–600 ms generation step, so it is off by default and selectable
+   per request.
+
+See [benchmark_report.md](benchmark_report.md) for the full matrix.
+
 ## What is left
 
-Every milestone from 0 to 20 is built, and no page shows a placeholder. What
-remains is not implementation:
-
-1. **Switch the default retriever to dense, or don't.** The benchmark says dense
-   beats hybrid on every metric over 15 questions. One line in
-   `api/dependencies.py`. It is a product call on whether 15 questions justify
-   it, so it has not been made.
-2. **Grow the corpus** (open decisions 1 and 3). 19 chunks is small enough that
-   BM25's IDF floors to zero on common terms, and dense search costs 2.6 ms — the
-   index is not the bottleneck, so growing it is close to free.
-3. **Wire the reranker, or delete it** (open decision 2). It is implemented,
-   costs ~500 ms on CPU, and every pipeline trace reports it skipped.
-4. **Phase 8** — the frontend is not deployed. The backend runs on AWS Lambda.
-5. **Phase 10** — portfolio polish. Screenshots are now capturable headlessly;
-   the driver lives outside the repo.
+- **Deploy the frontend.** `frontend/vercel.json` and
+  [deployment.md](deployment.md) are ready; the deploy itself needs Vercel
+  credentials this repository does not hold. The backend runs on AWS Lambda.
+- **Generation quality is unmeasured.** Every metric here is retrieval-only. The
+  generation evaluator exists and costs LLM calls, so it has no endpoint yet.
+- **A demo GIF.** Screenshots are captured headlessly into `docs/screenshots/`;
+  a recorded walkthrough is not.
 
 ---
 
