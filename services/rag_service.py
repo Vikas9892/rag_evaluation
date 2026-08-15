@@ -120,27 +120,86 @@ class RAGService:
     ) -> Generator[dict, None, None]:
         """Yield SSE-ready event dicts: sources → tokens → done.
 
-        The streaming path bypasses the metrics counter — the caller is
-        responsible for recording latency via the 'done' event timing.
+        The 'done' event carries the same request_id and latency breakdown that
+        answer() returns. Without it a streamed query is untraceable — the id in
+        the logs would have nothing to join against on the client — and the
+        latency this platform exists to report would be missing from the path
+        the UI actually uses.
+
+        It also carries time-to-first-token, which only the streaming path can
+        measure and which is the number a user actually experiences: an answer
+        that starts in 200 ms and finishes in 3 s feels faster than one that
+        appears whole at 1.5 s.
         """
+        request_id = str(uuid.uuid4())
         k = top_k if top_k is not None else self._default_top_k
 
-        results = self._retriever.retrieve(question, top_k=k)
-        sources = [
-            {
-                "document_id": r.chunk.document_id,
-                "chunk_id": r.chunk.chunk_id,
-                "score": round(r.score, 4),
-            }
-            for r in results
-        ]
-        yield {"type": "sources", "data": sources}
+        try:
+            t0 = time.perf_counter()
+            results = self._retriever.retrieve(question, top_k=k)
+            retrieval_ms = (time.perf_counter() - t0) * 1000
 
-        prompt = self._builder.build(question, results)
-        for token in self._generator.stream(prompt, results):
-            yield {"type": "token", "data": token}
+            sources = [
+                {
+                    "document_id": r.chunk.document_id,
+                    "chunk_id": r.chunk.chunk_id,
+                    "score": round(r.score, 4),
+                }
+                for r in results
+            ]
+            yield {"type": "sources", "data": sources}
 
-        yield {"type": "done"}
+            prompt = self._builder.build(question, results)
+
+            generation_start = time.perf_counter()
+            first_token_ms = None
+            token_count = 0
+            for token in self._generator.stream(prompt, results):
+                if first_token_ms is None:
+                    first_token_ms = (time.perf_counter() - generation_start) * 1000
+                token_count += 1
+                yield {"type": "token", "data": token}
+            generation_ms = (time.perf_counter() - generation_start) * 1000
+
+            self._metrics.total_queries += 1
+            self._metrics.total_retrieval_ms += retrieval_ms
+            self._metrics.total_generation_ms += generation_ms
+        except Exception:
+            # Counted here as well as in answer(); a platform that reports
+            # total_queries while ignoring every streamed one is misreporting.
+            self._metrics.errors += 1
+            raise
+
+        logger.info(
+            json.dumps({
+                "event": "stream",
+                "request_id": request_id,
+                "question_len": len(question),
+                "chunks_retrieved": len(results),
+                "retrieval_ms": round(retrieval_ms, 1),
+                "generation_ms": round(generation_ms, 1),
+                "first_token_ms": (
+                    round(first_token_ms, 1) if first_token_ms is not None else None
+                ),
+                "total_ms": round(retrieval_ms + generation_ms, 1),
+                "tokens": token_count,
+            })
+        )
+
+        yield {
+            "type": "done",
+            "data": {
+                "request_id": request_id,
+                "retrieval_latency_ms": round(retrieval_ms, 1),
+                "generation_latency_ms": round(generation_ms, 1),
+                "total_latency_ms": round(retrieval_ms + generation_ms, 1),
+                # None when the model produced no tokens at all, which is a
+                # different situation from "arrived instantly".
+                "first_token_latency_ms": (
+                    round(first_token_ms, 1) if first_token_ms is not None else None
+                ),
+            },
+        }
 
     # ------------------------------------------------------------------
     # Metrics

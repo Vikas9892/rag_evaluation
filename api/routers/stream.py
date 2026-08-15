@@ -1,10 +1,15 @@
 """Server-Sent Events streaming endpoint.
 
-Clients receive three event types:
+Clients receive four event types:
   {"type": "sources", "data": [...]}   — retrieved chunks (sent first)
   {"type": "token",   "data": "..."}   — one answer token per event
-  {"type": "done"}                     — stream complete; client may close
+  {"type": "done",    "data": {...}}   — request_id and latency breakdown,
+                                         including time-to-first-token
   {"type": "error",   "data": "..."}   — unrecoverable error
+
+An error event can arrive *after* tokens have already been sent: the failure may
+happen part-way through generation. Clients should keep what they have received
+and report the failure alongside it rather than discarding a partial answer.
 """
 import json
 
