@@ -186,6 +186,23 @@ question spending Groq budget twice.
 Reading `useSearchParams` opts the subtree out of static rendering, so the page wraps it in
 `<Suspense>`; the shell prerenders and the panel hydrates.
 
+### Streaming inside a cached query
+
+The answer arrives over SSE, but `useRagQuery` is still one react-query query. The
+`queryFn` consumes the stream and publishes each token with `setQueryData` against its own
+key, so a single cache entry is also the live one — a shared link still answers on arrival,
+and a repeated question is still served from cache rather than paid for twice.
+
+`complete` is tracked separately from having text, because a stream that dies half way also
+leaves text behind. A connection that ends without `done` is a failure, not a short answer.
+
+| Situation | What renders |
+|---|---|
+| Failure, nothing received | `ErrorState` in place of the answer |
+| Failure after tokens arrived | the partial answer, with `ErrorState` beneath it |
+| Stream ended without `done` | the partial answer, with a `parse` failure beneath it |
+| Cancelled (navigated away) | nothing — see the error taxonomy |
+
 ## Rendering a failure
 
 | Situation | Component | Why |

@@ -91,8 +91,20 @@ hook. No page consumes these yet; the first real consumer is M8.
 | # | Milestone | Status | Notes |
 |---|---|---|---|
 | 8 | Question input — autocomplete, history, clear | ✅ | `54b39df` — `/query?q=…&top_k=10`; **no `retriever` param, see below** |
-| 9 | Streaming answer via `/stream` | ⬜ | `streamQuery` is implemented and tested (including SSE frames split mid-JSON across chunk boundaries) but **no page consumes it** |
-| 10 | Answer UI — answer, confidence, sources, latency | 🟡 | the answer and total latency render; confidence and per-source attribution do not |
+| 9 | Streaming answer via `/stream` | ✅ | `7a929ea`, `e3484b9` |
+| 10 | Answer UI — answer, confidence, sources, latency | 🟡 | answer, latency and time-to-first-token render; confidence and per-source attribution do not |
+
+M9 required a backend change: the SSE contract closed with a bare
+`{"type": "done"}`, so moving the UI onto `/stream` would have dropped the
+`request_id` and the latency breakdown that `POST /query` returns. `done` now
+carries both, plus time-to-first-token, which only the streaming path can
+measure. Streamed queries are also counted in `/metrics` now — they were
+invisible there, so `total_queries` would have read 0 once the UI switched.
+
+A measurement worth keeping: on a short answer the first token arrived at
+532 ms of 545 ms total generation. Groq buffered nearly the whole response, so
+streaming bought almost nothing in perceived latency here. It will matter on
+long answers; on short ones it is close to theatre.
 
 **A third blocker, found while building M8.** The settings placeholder promised
 `/query?q=…&top_k=10&retriever=hybrid`, but **`retriever` is not a request
@@ -192,14 +204,12 @@ These were raised before Milestone 2 and are still unanswered:
 
 ## Suggested next step
 
-**Milestone 9 — streaming.** `streamQuery` has been implemented and tested since
-M6 with no consumer, and the query page now has somewhere to put the tokens. It
-is a contained change: the same URL state, a different transport.
-
-Alternatively **the backend score contract**, which is the single change that
-unblocks the most: per-retriever scores would clear M11, a per-request retriever
-would let the settings page keep its promise, and both are the same edit to
-`RAGService.answer()` and `HybridRetriever`.
+**The backend score contract.** It is now the single change that unblocks the
+most: per-retriever scores clear M11, a per-request retriever lets the settings
+page keep its promise, and both are the same edit to `RAGService` and
+`HybridRetriever`. M10's remaining half — per-source attribution — wants it too,
+since the stream already delivers sources and only the score breakdown is
+missing.
 
 M15 stays blocked on the corpus regardless.
 
