@@ -8,7 +8,7 @@ from chunking.chunk import Chunk
 from embeddings.embedder import Embedder
 
 from .faiss_store import FAISSStore
-from .ranking import RetrievalResult
+from .ranking import RetrievalResult, RetrievalTrace, StageScore
 
 logger = get_logger(__name__)
 
@@ -74,7 +74,17 @@ class Retriever:
                 end_char=rec["end_char"],
                 metadata=rec["metadata"],
             )
-            results.append(RetrievalResult(chunk=chunk, score=float(score), rank=rank))
+            results.append(
+                RetrievalResult(
+                    chunk=chunk,
+                    score=float(score),
+                    rank=rank,
+                    # This retriever *is* the dense stage, so it records itself.
+                    # A caller that fuses will add the other stages around it
+                    # rather than recomputing what this one already knows.
+                    trace=RetrievalTrace(dense=StageScore(score=float(score), rank=rank)),
+                )
+            )
 
         if results:
             logger.info(

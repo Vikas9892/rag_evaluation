@@ -4,7 +4,7 @@ from config.logging_config import get_logger
 from config.settings import TOP_K
 from chunking.chunk import Chunk
 
-from .ranking import RetrievalResult
+from .ranking import RetrievalResult, RetrievalTrace, StageScore
 
 logger = get_logger(__name__)
 
@@ -49,7 +49,12 @@ class BM25Store:
             if score < 1e-10:
                 break
             results.append(
-                RetrievalResult(chunk=self._chunks[idx], score=float(score), rank=rank)
+                RetrievalResult(
+                    chunk=self._chunks[idx],
+                    score=float(score),
+                    rank=rank,
+                    trace=RetrievalTrace(sparse=StageScore(score=float(score), rank=rank)),
+                )
             )
 
         logger.debug(

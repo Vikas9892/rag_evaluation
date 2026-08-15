@@ -17,7 +17,7 @@ from chunking.chunk import Chunk
 
 from .bm25_store import BM25Store
 from .faiss_store import FAISSStore
-from .ranking import RetrievalResult
+from .ranking import RetrievalResult, RetrievalTrace, RetrieverMode, StageScore
 from .retriever import Retriever
 
 logger = get_logger(__name__)
@@ -79,8 +79,31 @@ class HybridRetriever:
     # Core operation
     # ------------------------------------------------------------------
 
-    def retrieve(self, query: str, top_k: int = TOP_K) -> List[RetrievalResult]:
-        """Retrieve top_k chunks via RRF-fused dense + sparse scores."""
+    def retrieve(
+        self,
+        query: str,
+        top_k: int = TOP_K,
+        mode: RetrieverMode = "hybrid",
+    ) -> List[RetrievalResult]:
+        """Retrieve top_k chunks, recording what each stage contributed.
+
+        `mode` selects the strategy: "dense" and "sparse" run one stage alone,
+        "hybrid" fuses both with RRF. Comparing them is the point of the
+        platform, so it is a per-request choice rather than a deployment one.
+
+        Every result carries a trace of the stages that ranked it. Fusion used
+        to collapse two rankings into one number and throw the inputs away,
+        which made it impossible to answer the question the retrieval table
+        exists for: *which* retriever found this, and where did the other one
+        put it?
+        """
+        if mode == "dense":
+            return self._dense.retrieve(query, top_k=top_k)
+        if mode == "sparse":
+            return self._bm25.search(query, top_k=top_k)
+
+        # Fusion needs a wider window than it returns: a chunk ranked 30th by
+        # one retriever and 2nd by the other should still surface.
         candidates = top_k * self._candidate_multiplier
 
         dense_results = self._dense.retrieve(query, top_k=candidates)
@@ -88,16 +111,20 @@ class HybridRetriever:
 
         rrf_scores: dict[str, float] = {}
         chunk_map: dict[str, Chunk] = {}
+        dense_stages: dict[str, StageScore] = {}
+        sparse_stages: dict[str, StageScore] = {}
 
         for rank, result in enumerate(dense_results, start=1):
             cid = result.chunk.chunk_id
             rrf_scores[cid] = rrf_scores.get(cid, 0.0) + 1.0 / (_RRF_K + rank)
             chunk_map[cid] = result.chunk
+            dense_stages[cid] = StageScore(score=result.score, rank=rank)
 
         for rank, result in enumerate(bm25_results, start=1):
             cid = result.chunk.chunk_id
             rrf_scores[cid] = rrf_scores.get(cid, 0.0) + 1.0 / (_RRF_K + rank)
             chunk_map[cid] = result.chunk
+            sparse_stages[cid] = StageScore(score=result.score, rank=rank)
 
         sorted_ids = sorted(rrf_scores, key=rrf_scores.__getitem__, reverse=True)
         results = [
@@ -105,6 +132,13 @@ class HybridRetriever:
                 chunk=chunk_map[cid],
                 score=round(rrf_scores[cid], 6),
                 rank=i + 1,
+                trace=RetrievalTrace(
+                    # Absent when that retriever did not surface this chunk
+                    # within its candidate window — not when it scored zero.
+                    dense=dense_stages.get(cid),
+                    sparse=sparse_stages.get(cid),
+                    fused=StageScore(score=round(rrf_scores[cid], 6), rank=i + 1),
+                ),
             )
             for i, cid in enumerate(sorted_ids[:top_k])
         ]
