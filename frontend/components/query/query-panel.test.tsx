@@ -24,6 +24,7 @@ vi.mock("@/services/api", () => ({ streamQuery }));
 const DONE = {
   request_id: "3f8a1c20-d42b-4e7e-9b5f-abcdef012345",
   retriever: "hybrid" as const,
+  abstained: false,
   retrieval_latency_ms: 4.2,
   generation_latency_ms: 1183,
   total_latency_ms: 1187.2,

@@ -84,14 +84,239 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/config": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Pipeline configuration and corpus size
+         * @description What this deployment is actually running: models, chunking parameters, retrieval defaults and the size of the indexed corpus.
+         */
+        get: operations["config_config_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/health/deep": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Dependency-by-dependency health
+         * @description Unlike `/health`, this touches every dependency the pipeline needs. It is deliberately a separate endpoint: a load balancer probe must stay cheap and must not fail because a downstream API key is missing.
+         */
+        get: operations["deep_health_health_deep_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/evaluation": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Retrieval quality over the labelled dataset
+         * @description Precision@K, Recall, Hit Rate and MRR measured against ground-truth chunk spans, plus the per-question breakdown. No LLM calls are made.
+         */
+        get: operations["evaluation_evaluation_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/benchmarks": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Retrieval quality across configurations
+         * @description Sweeps retriever × top-K and reports each cell's metrics, so configurations can be compared rather than argued about.
+         */
+        get: operations["benchmarks_benchmarks_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/metrics/prometheus": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Prometheus exposition of the in-process counters
+         * @description The same counters as `GET /metrics`, in text exposition format. Values are per-process and reset on restart, which is what a counter from an in-memory source means — there is no persistence behind them.
+         */
+        get: operations["prometheus_metrics_prometheus_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
+        /** BenchmarkCell */
+        BenchmarkCell: {
+            /**
+             * Retriever
+             * @enum {string}
+             */
+            retriever: "dense" | "sparse" | "hybrid";
+            /** Top K */
+            top_k: number;
+            metrics: components["schemas"]["RetrievalMetrics"];
+        };
+        /** BenchmarkResponse */
+        BenchmarkResponse: {
+            /** Dataset Size */
+            dataset_size: number;
+            /** Cells */
+            cells: components["schemas"]["BenchmarkCell"][];
+            /** Cached */
+            cached: boolean;
+            /**
+             * Discriminating
+             * @description False when every configuration scores identically, which means the corpus is too small for the comparison to say anything about the retrievers
+             */
+            discriminating: boolean;
+        };
+        /**
+         * ConfigResponse
+         * @description What this deployment is running, so the UI never hardcodes it.
+         */
+        ConfigResponse: {
+            /** Embedding Model */
+            embedding_model: string;
+            /** Llm Model */
+            llm_model: string;
+            /** Llm Temperature */
+            llm_temperature: number;
+            /** Llm Max Tokens */
+            llm_max_tokens: number;
+            /** Chunk Size */
+            chunk_size: number;
+            /** Chunk Overlap */
+            chunk_overlap: number;
+            /** Min Chunk Chars */
+            min_chunk_chars: number;
+            /** Default Top K */
+            default_top_k: number;
+            /** Max Context Chunks */
+            max_context_chunks: number;
+            /**
+             * Retrievers
+             * @description Strategies this deployment accepts
+             */
+            retrievers: string[];
+            /**
+             * Indexed Chunks
+             * @description Chunks in the index
+             */
+            indexed_chunks: number;
+            /**
+             * Documents
+             * @description Distinct source documents behind them
+             */
+            documents: number;
+            /**
+             * Reranker Enabled
+             * @description Whether the cross-encoder runs in the live path; it is implemented but not wired, and the pipeline trace reports it skipped
+             */
+            reranker_enabled: boolean;
+        };
+        /** DeepHealthResponse */
+        DeepHealthResponse: {
+            /**
+             * Status
+             * @description Worst of the individual checks
+             * @enum {string}
+             */
+            status: "healthy" | "degraded" | "unhealthy";
+            /**
+             * Checks
+             * @description Every dependency, including passing ones
+             */
+            checks: components["schemas"]["HealthCheck"][];
+        };
+        /** EvaluationResponse */
+        EvaluationResponse: {
+            /** Top K */
+            top_k: number;
+            /**
+             * Retriever
+             * @enum {string}
+             */
+            retriever: "dense" | "sparse" | "hybrid";
+            /** Dataset Size */
+            dataset_size: number;
+            /**
+             * Cached
+             * @description Whether this run was served from the in-process cache
+             */
+            cached: boolean;
+            metrics: components["schemas"]["RetrievalMetrics"];
+            /** Questions */
+            questions: components["schemas"]["PerQuestionResult"][];
+        };
         /** HTTPValidationError */
         HTTPValidationError: {
             /** Detail */
             detail?: components["schemas"]["ValidationError"][];
+        };
+        /**
+         * HealthCheck
+         * @description One dependency's verdict.
+         */
+        HealthCheck: {
+            /**
+             * Name
+             * @description Dependency checked
+             */
+            name: string;
+            /**
+             * Status
+             * @description warn means degraded but serving — a missing API key breaks generation while retrieval keeps working
+             * @enum {string}
+             */
+            status: "pass" | "warn" | "fail";
+            /**
+             * Detail
+             * @description What was found, in terms an operator can act on
+             */
+            detail: string;
         };
         /**
          * HealthResponse
@@ -142,6 +367,27 @@ export interface components {
              * @description Queries that raised before returning
              */
             errors: number;
+        };
+        /** PerQuestionResult */
+        PerQuestionResult: {
+            /** Id */
+            id: number;
+            /** Question */
+            question: string;
+            /** Hit */
+            hit: boolean;
+            /** Precision */
+            precision: number;
+            /** Recall */
+            recall: number;
+            /** Reciprocal Rank */
+            reciprocal_rank: number;
+            /** Latency Ms */
+            latency_ms: number;
+            /** Retrieved Ids */
+            retrieved_ids: string[];
+            /** Expected Ids */
+            expected_ids: string[];
         };
         /**
          * PipelineStageInfo
@@ -260,6 +506,12 @@ export interface components {
              */
             request_id: string;
             /**
+             * Abstained
+             * @description True when the model declined for lack of grounding, per the exact reply the system prompt demands. A compliance check, not an interpretation of the answer's meaning.
+             * @default false
+             */
+            abstained: boolean;
+            /**
              * Retriever
              * @description Which strategy ran. Needed to read `sources[].scores`: it tells a null stage that did not run apart from one that missed a chunk.
              * @default hybrid
@@ -271,6 +523,34 @@ export interface components {
              * @description Every stage in data-flow order, including those that did not run
              */
             pipeline?: components["schemas"]["PipelineStageInfo"][];
+        };
+        /** RetrievalMetrics */
+        RetrievalMetrics: {
+            /**
+             * Precision At K
+             * @description Structurally capped when a question has fewer relevant chunks than K: retrieving 5 for 1 relevant chunk caps this at 0.2
+             */
+            precision_at_k: number;
+            /**
+             * Recall At K
+             * @description Share of relevant chunks retrieved
+             */
+            recall_at_k: number;
+            /**
+             * Hit Rate
+             * @description Questions with at least one relevant chunk retrieved
+             */
+            hit_rate: number;
+            /**
+             * Mrr
+             * @description Mean reciprocal rank of the first relevant chunk
+             */
+            mrr: number;
+            /**
+             * Avg Latency Ms
+             * @description Mean retrieval latency across the dataset
+             */
+            avg_latency_ms: number;
         };
         /** SourceInfo */
         SourceInfo: {
@@ -510,6 +790,146 @@ export interface operations {
                 };
             };
             /** @description Index or API key not available */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    config_config_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ConfigResponse"];
+                };
+            };
+            /** @description Pipeline not available */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    deep_health_health_deep_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DeepHealthResponse"];
+                };
+            };
+        };
+    };
+    evaluation_evaluation_get: {
+        parameters: {
+            query?: {
+                top_k?: number;
+                retriever?: "dense" | "sparse" | "hybrid";
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EvaluationResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+            /** @description Index or dataset not available */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    benchmarks_benchmarks_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BenchmarkResponse"];
+                };
+            };
+            /** @description Index or dataset not available */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    prometheus_metrics_prometheus_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "text/plain": string;
+                };
+            };
+            /** @description Pipeline not available */
             503: {
                 headers: {
                     [name: string]: unknown;

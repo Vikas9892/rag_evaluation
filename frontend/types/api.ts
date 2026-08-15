@@ -18,6 +18,14 @@ export type SourceInfo = Schemas["SourceInfo"];
 export type PipelineStage = Schemas["PipelineStageInfo"];
 export type StageName = PipelineStage["name"];
 export type StageStatus = PipelineStage["status"];
+export type ConfigResponse = Schemas["ConfigResponse"];
+export type DeepHealthResponse = Schemas["DeepHealthResponse"];
+export type HealthCheck = Schemas["HealthCheck"];
+export type EvaluationResponse = Schemas["EvaluationResponse"];
+export type RetrievalMetrics = Schemas["RetrievalMetrics"];
+export type PerQuestionResult = Schemas["PerQuestionResult"];
+export type BenchmarkResponse = Schemas["BenchmarkResponse"];
+export type BenchmarkCell = Schemas["BenchmarkCell"];
 
 /** One event from the /stream SSE endpoint. */
 export type StreamEvent =
@@ -41,6 +49,8 @@ export interface StreamDone {
   first_token_latency_ms: number | null;
   /** Every stage in data-flow order, including the ones that did not run. */
   pipeline: PipelineStage[];
+  /** True when the model declined for lack of grounding. */
+  abstained: boolean;
 }
 
 /**

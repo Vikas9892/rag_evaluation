@@ -1,4 +1,8 @@
 import type {
+  BenchmarkResponse,
+  ConfigResponse,
+  DeepHealthResponse,
+  EvaluationResponse,
   HealthResponse,
   MetricsResponse,
   QueryResponse,
@@ -125,6 +129,34 @@ export function getHealth(signal?: AbortSignal): Promise<HealthResponse> {
 
 export function getMetrics(signal?: AbortSignal): Promise<MetricsResponse> {
   return request<MetricsResponse>("/metrics", { signal }, 5_000);
+}
+
+export function getConfig(signal?: AbortSignal): Promise<ConfigResponse> {
+  return request<ConfigResponse>("/config", { signal }, 5_000);
+}
+
+export function getDeepHealth(signal?: AbortSignal): Promise<DeepHealthResponse> {
+  return request<DeepHealthResponse>("/health/deep", { signal }, 10_000);
+}
+
+export function getEvaluation(
+  topK: number,
+  retriever: RetrieverMode,
+  signal?: AbortSignal,
+): Promise<EvaluationResponse> {
+  // Longer deadline than a page load would normally allow: an uncached run
+  // embeds every question in the dataset. Subsequent runs are served from the
+  // API's cache and return immediately.
+  return request<EvaluationResponse>(
+    `/evaluation?top_k=${topK}&retriever=${retriever}`,
+    { signal },
+    60_000,
+  );
+}
+
+export function getBenchmarks(signal?: AbortSignal): Promise<BenchmarkResponse> {
+  // Nine configurations over the whole dataset on a cold cache.
+  return request<BenchmarkResponse>("/benchmarks", { signal }, 180_000);
 }
 
 export function postQuery(

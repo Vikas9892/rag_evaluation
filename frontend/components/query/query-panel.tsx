@@ -6,7 +6,6 @@ import { useState } from "react";
 
 import { EmptyState } from "@/components/empty-state";
 import { ErrorState } from "@/components/error-state";
-import { PendingPanel } from "@/components/pending-panel";
 import { QuestionInput } from "@/components/query/question-input";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -261,6 +260,7 @@ function Result({
             ) : null}
           </p>
 
+          {data?.metrics?.abstained ? <Abstained /> : null}
           {data?.metrics ? <Metrics metrics={data.metrics} /> : null}
         </CardContent>
       </Card>
@@ -294,12 +294,24 @@ function Result({
           </CardContent>
         </Card>
       ) : null}
-
-      <PendingPanel milestone="Milestone 10">
-        Whether the model abstained for lack of grounding. The API does not report it, and
-        inferring it from the answer text would be guesswork dressed as a measurement.
-      </PendingPanel>
     </>
+  );
+}
+
+/**
+ * The model declined, and that is a result rather than a failure.
+ *
+ * Reported by the server, which checks the answer against the exact reply the
+ * system prompt demands. Retrieval may still have been fine — the chunks below
+ * show whether the answer was there to find — so this says what happened
+ * without assigning blame to a stage.
+ */
+function Abstained() {
+  return (
+    <p className="border-muted-foreground/30 text-muted-foreground border-l-2 pl-3 text-sm">
+      The model declined to answer from the retrieved context. Compare the chunks below:
+      if the answer is there, the retrieval was right and the generation was not.
+    </p>
   );
 }
 
