@@ -60,7 +60,9 @@ vectors.npy  faiss.index          ← offline ingestion
     FastAPI POST /query → QueryResponse (JSON)
 ```
 
-See [docs/architecture.md](docs/architecture.md) for full diagrams,
+See [docs/benchmark_report.md](docs/benchmark_report.md) for measured retrieval
+quality across 18 configurations, [docs/deployment.md](docs/deployment.md) for
+shipping it, [docs/architecture.md](docs/architecture.md) for full diagrams,
 [docs/product_spec.md](docs/product_spec.md) for the product's central design
 decision, and [docs/roadmap.md](docs/roadmap.md) for milestone status and the
 open blockers.

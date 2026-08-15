@@ -110,6 +110,13 @@ trade for an interactive query, so the default is dense without reranking. The
 reranker remains available per request (`"reranker": true`) and is swept in
 every benchmark run, so the trade-off is re-measurable rather than assumed.
 
+## Screenshots
+
+![Benchmarks](screenshots/benchmarks.png)
+
+The matrix as the platform renders it. Every figure comes from `GET /benchmarks`;
+nothing is transcribed by hand.
+
 ## Caveats
 
 - 53 questions is small. Differences of 0.02–0.04 MRR are directional, not
