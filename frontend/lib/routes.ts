@@ -1,6 +1,7 @@
 import {
   BarChart3,
   FlaskConical,
+  FolderOpen,
   Info,
   LayoutDashboard,
   Search,
@@ -28,6 +29,12 @@ export const ROUTES: readonly AppRoute[] = [
     label: "Overview",
     description: "System health, corpus size and the last benchmark run.",
     icon: LayoutDashboard,
+  },
+  {
+    href: "/workspace",
+    label: "Workspace",
+    description: "Upload documents, watch them index, then query your own corpus.",
+    icon: FolderOpen,
   },
   {
     href: "/query",

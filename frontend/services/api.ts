@@ -1,5 +1,10 @@
 import type {
   BenchmarkResponse,
+  CorpusSummary,
+  DocumentCreateResponse,
+  DocumentResponse,
+  QueueStatusResponse,
+  SettingsResponse,
   ConfigResponse,
   DeepHealthResponse,
   EvaluationResponse,
@@ -157,6 +162,90 @@ export function getEvaluation(
 export function getBenchmarks(signal?: AbortSignal): Promise<BenchmarkResponse> {
   // Nine configurations over the whole dataset on a cold cache.
   return request<BenchmarkResponse>("/benchmarks", { signal }, 180_000);
+}
+
+export function getCorpora(signal?: AbortSignal): Promise<{ corpora: CorpusSummary[] }> {
+  return request<{ corpora: CorpusSummary[] }>("/corpora", { signal }, 10_000);
+}
+
+export function getDocuments(
+  corpusId?: string,
+  signal?: AbortSignal,
+): Promise<{ documents: DocumentResponse[] }> {
+  const query = corpusId ? `?corpus_id=${encodeURIComponent(corpusId)}` : "";
+  return request<{ documents: DocumentResponse[] }>(
+    `/documents${query}`,
+    { signal },
+    10_000,
+  );
+}
+
+export function getDocumentStatus(
+  documentId: string,
+  signal?: AbortSignal,
+): Promise<DocumentResponse> {
+  return request<DocumentResponse>(
+    `/documents/${encodeURIComponent(documentId)}/status`,
+    { signal },
+    10_000,
+  );
+}
+
+export function deleteDocument(documentId: string): Promise<unknown> {
+  return request<unknown>(
+    `/documents/${encodeURIComponent(documentId)}`,
+    { method: "DELETE" },
+    30_000,
+  );
+}
+
+export function getQueueStatus(signal?: AbortSignal): Promise<QueueStatusResponse> {
+  return request<QueueStatusResponse>("/queue", { signal }, 5_000);
+}
+
+export function getSettings(signal?: AbortSignal): Promise<SettingsResponse> {
+  return request<SettingsResponse>("/settings", { signal }, 10_000);
+}
+
+/**
+ * Upload one file.
+ *
+ * Deliberately not routed through `request`: that helper sets a JSON
+ * content-type, and a multipart body needs the browser to set its own boundary.
+ * The deadline is long because the request carries the whole file.
+ */
+export async function uploadDocument(
+  file: File,
+  corpusId: string,
+  options: { chunkSize?: number; chunkOverlap?: number } = {},
+): Promise<DocumentCreateResponse> {
+  const params = new URLSearchParams({ corpus_id: corpusId });
+  if (options.chunkSize) params.set("chunk_size", String(options.chunkSize));
+  if (options.chunkOverlap !== undefined) {
+    params.set("chunk_overlap", String(options.chunkOverlap));
+  }
+
+  const body = new FormData();
+  body.append("file", file);
+
+  let response: Response;
+  try {
+    response = await fetch(`${apiBaseUrl()}/documents?${params}`, {
+      method: "POST",
+      body,
+    });
+  } catch (cause) {
+    throw new ApiError("network", "The upload never reached the API", { cause });
+  }
+
+  if (!response.ok) {
+    throw new ApiError(
+      kindForStatus(response.status),
+      `Upload failed with ${response.status}`,
+      { status: response.status, detail: await readDetail(response) },
+    );
+  }
+  return (await response.json()) as DocumentCreateResponse;
 }
 
 export function postQuery(

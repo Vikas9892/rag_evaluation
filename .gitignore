@@ -16,5 +16,14 @@ logs/*.log
 index/faiss.index
 index/metadata.json
 index/vectors.npy
+
+# Per-corpus indexes, uploaded files and the document database are all
+# runtime state. The evaluation index is rebuilt by scripts/build_index.py;
+# a user's uploads are theirs and never belong in the repository.
+index/corpora/
+index/uploads/
+index/documents.db
+index/documents.db-shm
+index/documents.db-wal
 data/processed/
 reports/

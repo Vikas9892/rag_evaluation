@@ -104,6 +104,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/settings": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Every setting, grouped, with when it takes effect
+         * @description Separates query-time settings from indexing-time ones. Changing chunk size or the embedding model invalidates every existing index; changing top-K affects only the next request.
+         */
+        get: operations["settings_settings_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/health/deep": {
         parameters: {
             query?: never;
@@ -184,6 +204,108 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/documents": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List uploaded documents */
+        get: operations["list_documents_documents_get"];
+        put?: never;
+        /**
+         * Upload a document for indexing
+         * @description Accepts the file, records it and queues indexing. Returns 202 because the document is not searchable yet — poll `GET /documents/{id}/status` until it reports READY.
+         */
+        post: operations["upload_document_documents_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/documents/{document_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** One document */
+        get: operations["get_document_documents__document_id__get"];
+        put?: never;
+        post?: never;
+        /**
+         * Delete a document
+         * @description Removes the record, the stored file and the document's chunks. The corpus index is rebuilt from the vectors already on disk, so nothing is re-embedded.
+         */
+        delete: operations["delete_document_documents__document_id__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/documents/{document_id}/status": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Indexing status
+         * @description The same record as `GET /documents/{id}`, exposed separately because it is the endpoint a client polls while indexing runs.
+         */
+        get: operations["document_status_documents__document_id__status_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/corpora": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Collections available to query
+         * @description Every corpus with an index, plus any that only exist as records so far.
+         */
+        get: operations["list_corpora_corpora_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/queue": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * What the indexing queue is
+         * @description Reported rather than assumed: the default queue is in-process and loses jobs on restart, which a client showing an indexing spinner should know.
+         */
+        get: operations["queue_status_queue_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -223,6 +345,11 @@ export interface components {
              * @description False when every configuration scores identically, which means the corpus is too small for the comparison to say anything about the retrievers
              */
             discriminating: boolean;
+        };
+        /** Body_upload_document_documents_post */
+        Body_upload_document_documents_post: {
+            /** File */
+            file: string;
         };
         /**
          * ConfigResponse
@@ -280,6 +407,33 @@ export interface components {
              */
             default_retriever: string;
         };
+        /** CorpusListResponse */
+        CorpusListResponse: {
+            /** Corpora */
+            corpora: components["schemas"]["CorpusSummary"][];
+        };
+        /**
+         * CorpusSummary
+         * @description One collection, and whether it can be searched.
+         */
+        CorpusSummary: {
+            /** Corpus Id */
+            corpus_id: string;
+            /** Documents */
+            documents: number;
+            /** Chunks */
+            chunks: number;
+            /**
+             * Ready
+             * @description Whether an index exists to query
+             */
+            ready: boolean;
+            /**
+             * Is Evaluation
+             * @description The corpus the benchmark measures. Kept separate so uploads cannot move a published metric.
+             */
+            is_evaluation: boolean;
+        };
         /** DeepHealthResponse */
         DeepHealthResponse: {
             /**
@@ -293,6 +447,81 @@ export interface components {
              * @description Every dependency, including passing ones
              */
             checks: components["schemas"]["HealthCheck"][];
+        };
+        /**
+         * DocumentCreateResponse
+         * @description Accepted for indexing — not yet indexed.
+         */
+        DocumentCreateResponse: {
+            /** Document Id */
+            document_id: string;
+            /** Job Id */
+            job_id: string;
+            /** Corpus Id */
+            corpus_id: string;
+            /**
+             * Status
+             * @description QUEUED; indexing happens on a worker
+             */
+            status: string;
+            /** Filename */
+            filename: string;
+            /**
+             * Duplicate Of
+             * @description Set when a byte-identical file is already in this corpus. Nothing is stored or indexed again and `document_id` is the existing document: two copies of the same text would occupy two top-K slots and answer the same question twice. `job_id` is empty because no work was queued.
+             */
+            duplicate_of?: string | null;
+        };
+        /** DocumentListResponse */
+        DocumentListResponse: {
+            /** Corpus Id */
+            corpus_id?: string | null;
+            /** Documents */
+            documents: components["schemas"]["DocumentResponse"][];
+        };
+        /**
+         * DocumentResponse
+         * @description One uploaded document and where it is in the pipeline.
+         */
+        DocumentResponse: {
+            /** Document Id */
+            document_id: string;
+            /** Corpus Id */
+            corpus_id: string;
+            /**
+             * Filename
+             * @description Sanitised for display; never a filesystem path
+             */
+            filename: string;
+            /** Content Type */
+            content_type: string;
+            /** Size Bytes */
+            size_bytes: number;
+            /**
+             * Status
+             * @description The worker's actual stage, not an invented progress step
+             * @enum {string}
+             */
+            status: "UPLOADING" | "QUEUED" | "PARSING" | "CHUNKING" | "EMBEDDING" | "INDEXING" | "READY" | "FAILED";
+            /**
+             * Progress
+             * @description 0 to 1 through the pipeline. A failed document reports 0, because a bar stopped part way reads as still working.
+             */
+            progress: number;
+            /**
+             * Chunk Count
+             * @description Chunks indexed; 0 until the document is READY
+             */
+            chunk_count: number;
+            /**
+             * Error
+             * @description Why indexing failed, in terms the uploader can act on
+             */
+            error?: string | null;
+            /** Created At */
+            created_at: string;
+            /** Updated At */
+            updated_at: string;
         };
         /** EvaluationResponse */
         EvaluationResponse: {
@@ -478,6 +707,12 @@ export interface components {
              */
             top_k: number;
             /**
+             * Corpus Id
+             * @description Which indexed collection to search. Retrieval is scoped to exactly one, so an uploaded document cannot be answered from another corpus.
+             * @default evaluation
+             */
+            corpus_id: string;
+            /**
              * Reranker
              * @description Run the cross-encoder over the retrieved candidates. Far more accurate per candidate and far slower — one model forward pass each — so it is opt-in and the retriever fetches a wider candidate list when it is on.
              * @default false
@@ -540,6 +775,12 @@ export interface components {
              */
             request_id: string;
             /**
+             * Corpus Id
+             * @description The collection that was searched
+             * @default evaluation
+             */
+            corpus_id: string;
+            /**
              * Abstained
              * @description True when the model declined for lack of grounding, per the exact reply the system prompt demands. A compliance check, not an interpretation of the answer's meaning.
              * @default false
@@ -557,6 +798,26 @@ export interface components {
              * @description Every stage in data-flow order, including those that did not run
              */
             pipeline?: components["schemas"]["PipelineStageInfo"][];
+        };
+        /**
+         * QueueStatusResponse
+         * @description What the queue is, and what it does not guarantee.
+         */
+        QueueStatusResponse: {
+            /**
+             * Backend
+             * @enum {string}
+             */
+            backend: "in-process" | "redis";
+            /**
+             * Durable
+             * @description False for the in-process queue: jobs are lost if the API restarts
+             */
+            durable: boolean;
+            /** Workers */
+            workers: number;
+            /** Note */
+            note: string;
         };
         /** RetrievalMetrics */
         RetrievalMetrics: {
@@ -585,6 +846,55 @@ export interface components {
              * @description Mean retrieval latency across the dataset
              */
             avg_latency_ms: number;
+        };
+        /**
+         * SettingDescriptor
+         * @description One setting, and when it takes effect.
+         *
+         *     The distinction is the point. Top-K changes the next answer; chunk size
+         *     changes nothing until every document is re-embedded and re-indexed. A UI
+         *     that shows them side by side as equivalent sliders promises something the
+         *     system cannot do, so the API states the scope rather than leaving the
+         *     frontend to guess.
+         */
+        SettingDescriptor: {
+            /** Key */
+            key: string;
+            /** Label */
+            label: string;
+            /**
+             * Value
+             * @description The value in force, as text for display
+             */
+            value: string;
+            /**
+             * Scope
+             * @description query: applies to the next request. indexing: fixed when a document was indexed. generation: applies to the next answer.
+             * @enum {string}
+             */
+            scope: "query" | "indexing" | "generation";
+            /**
+             * Requires Reindex
+             * @description True when changing this invalidates every existing index
+             */
+            requires_reindex: boolean;
+            /**
+             * Editable Per Request
+             * @description True when a single request may override it
+             */
+            editable_per_request: boolean;
+            /** Note */
+            note?: string | null;
+        };
+        /** SettingsResponse */
+        SettingsResponse: {
+            /**
+             * Groups
+             * @description Settings by area: retrieval, generation, indexing
+             */
+            groups: {
+                [key: string]: components["schemas"]["SettingDescriptor"][];
+            };
         };
         /** SourceInfo */
         SourceInfo: {
@@ -859,6 +1169,33 @@ export interface operations {
             };
         };
     };
+    settings_settings_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SettingsResponse"];
+                };
+            };
+            /** @description Pipeline not available */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
     deep_health_health_deep_get: {
         parameters: {
             query?: never;
@@ -970,6 +1307,242 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+        };
+    };
+    list_documents_documents_get: {
+        parameters: {
+            query?: {
+                corpus_id?: string | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DocumentListResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    upload_document_documents_post: {
+        parameters: {
+            query?: {
+                corpus_id?: string;
+                chunk_size?: number | null;
+                chunk_overlap?: number | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "multipart/form-data": components["schemas"]["Body_upload_document_documents_post"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DocumentCreateResponse"];
+                };
+            };
+            /** @description File exceeds the size limit */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description No parser exists for this file type */
+            415: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Empty file or invalid corpus id */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    get_document_documents__document_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                document_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DocumentResponse"];
+                };
+            };
+            /** @description No such document */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    delete_document_documents__document_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                document_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description No such document */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    document_status_documents__document_id__status_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                document_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DocumentResponse"];
+                };
+            };
+            /** @description No such document */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_corpora_corpora_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CorpusListResponse"];
+                };
+            };
+        };
+    };
+    queue_status_queue_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["QueueStatusResponse"];
+                };
             };
         };
     };
