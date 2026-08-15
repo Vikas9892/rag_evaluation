@@ -168,6 +168,14 @@ class QueryResponse(BaseModel):
     generation_latency_ms: float = Field(description="Time spent on LLM call (ms)")
     total_latency_ms: float = Field(description="End-to-end latency (ms)")
     request_id: str = Field(description="UUID for request tracing in logs")
+    abstained: bool = Field(
+        default=False,
+        description=(
+            "True when the model declined for lack of grounding, per the exact reply "
+            "the system prompt demands. A compliance check, not an interpretation of "
+            "the answer's meaning."
+        ),
+    )
     retriever: Literal["dense", "sparse", "hybrid"] = Field(
         default="hybrid",
         description=(
@@ -178,4 +186,101 @@ class QueryResponse(BaseModel):
     pipeline: List[PipelineStageInfo] = Field(
         default_factory=list,
         description="Every stage in data-flow order, including those that did not run",
+    )
+
+
+# ---------------------------------------------------------------------------
+# Ops
+# ---------------------------------------------------------------------------
+
+
+class HealthCheck(BaseModel):
+    """One dependency's verdict."""
+
+    name: str = Field(description="Dependency checked")
+    status: Literal["pass", "warn", "fail"] = Field(
+        description="warn means degraded but serving — a missing API key breaks "
+        "generation while retrieval keeps working"
+    )
+    detail: str = Field(description="What was found, in terms an operator can act on")
+
+
+class DeepHealthResponse(BaseModel):
+    status: Literal["healthy", "degraded", "unhealthy"] = Field(
+        description="Worst of the individual checks"
+    )
+    checks: List[HealthCheck] = Field(description="Every dependency, including passing ones")
+
+
+class ConfigResponse(BaseModel):
+    """What this deployment is running, so the UI never hardcodes it."""
+
+    embedding_model: str
+    llm_model: str
+    llm_temperature: float
+    llm_max_tokens: int
+    chunk_size: int
+    chunk_overlap: int
+    min_chunk_chars: int
+    default_top_k: int
+    max_context_chunks: int
+    retrievers: List[str] = Field(description="Strategies this deployment accepts")
+    indexed_chunks: int = Field(description="Chunks in the index")
+    documents: int = Field(description="Distinct source documents behind them")
+    reranker_enabled: bool = Field(
+        description="Whether the cross-encoder runs in the live path; it is implemented "
+        "but not wired, and the pipeline trace reports it skipped"
+    )
+
+
+# ---------------------------------------------------------------------------
+# Evaluation
+# ---------------------------------------------------------------------------
+
+
+class RetrievalMetrics(BaseModel):
+    precision_at_k: float = Field(
+        description="Structurally capped when a question has fewer relevant chunks "
+        "than K: retrieving 5 for 1 relevant chunk caps this at 0.2"
+    )
+    recall_at_k: float = Field(description="Share of relevant chunks retrieved")
+    hit_rate: float = Field(description="Questions with at least one relevant chunk retrieved")
+    mrr: float = Field(description="Mean reciprocal rank of the first relevant chunk")
+    avg_latency_ms: float = Field(description="Mean retrieval latency across the dataset")
+
+
+class PerQuestionResult(BaseModel):
+    id: int
+    question: str
+    hit: bool
+    precision: float
+    recall: float
+    reciprocal_rank: float
+    latency_ms: float
+    retrieved_ids: List[str]
+    expected_ids: List[str]
+
+
+class EvaluationResponse(BaseModel):
+    top_k: int
+    retriever: Literal["dense", "sparse", "hybrid"]
+    dataset_size: int
+    cached: bool = Field(description="Whether this run was served from the in-process cache")
+    metrics: RetrievalMetrics
+    questions: List[PerQuestionResult]
+
+
+class BenchmarkCell(BaseModel):
+    retriever: Literal["dense", "sparse", "hybrid"]
+    top_k: int
+    metrics: RetrievalMetrics
+
+
+class BenchmarkResponse(BaseModel):
+    dataset_size: int
+    cells: List[BenchmarkCell]
+    cached: bool
+    discriminating: bool = Field(
+        description="False when every configuration scores identically, which means the "
+        "corpus is too small for the comparison to say anything about the retrievers"
     )

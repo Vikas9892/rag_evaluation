@@ -16,6 +16,26 @@ Rules:
 """
 
 
+#: The exact reply rule 2 demands when the context cannot answer the question.
+ABSTENTION_SENTINEL = "I don't know."
+
+
+def is_abstention(answer: str) -> bool:
+    """Whether the model declined for lack of grounding.
+
+    This checks compliance with the contract the system prompt sets, not the
+    meaning of the answer: rule 2 names the exact sentence to reply with, so a
+    match is the model doing as instructed. It is deliberately narrow — an
+    answer that merely sounds uncertain is not an abstention, because treating
+    hedging as a refusal would misreport a real answer as a non-answer.
+
+    A model that paraphrases ("I do not know") slips through. That is a
+    generation-side compliance failure and is better fixed there than papered
+    over here with fuzzy matching that would start swallowing real answers.
+    """
+    return answer.strip().rstrip(".").casefold() == ABSTENTION_SENTINEL.rstrip(".").casefold()
+
+
 class PromptBuilder:
     """Assembles a Prompt from a question and a list of RetrievalResults.
 

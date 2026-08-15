@@ -7,7 +7,7 @@ from typing import Generator, Iterator, List, Optional
 from config.logging_config import get_logger
 from config.settings import TOP_K
 from generation.generator import BaseGenerator
-from generation.prompt_builder import PromptBuilder
+from generation.prompt_builder import PromptBuilder, is_abstention
 from retrieval.pipeline import PipelineStage, fill_skipped
 from retrieval.ranking import RetrievalResult, RetrieverMode
 from retrieval.retriever import Retriever
@@ -22,6 +22,9 @@ class RAGResponse:
     retrieval_latency_ms: float
     generation_latency_ms: float
     request_id: str
+    #: True when the model declined for lack of grounding, per the prompt's
+    #: own contract. Distinct from an empty answer, and from a bad answer.
+    abstained: bool = False
     #: Every stage in canonical order, including the ones that did not run.
     pipeline: List[PipelineStage] = field(default_factory=list)
     #: Which strategy ran. Without it a null stage in a chunk's trace is
@@ -152,6 +155,7 @@ class RAGService:
             generation_latency_ms=response.latency_ms,
             request_id=request_id,
             retriever=retriever,
+            abstained=is_abstention(response.answer),
             pipeline=fill_skipped(
                 [
                     *retrieval_stages,
@@ -207,10 +211,15 @@ class RAGService:
             generation_start = time.perf_counter()
             first_token_ms = None
             token_count = 0
+            # Kept so the closing event can report abstention. The client
+            # reassembles the same string, but having the server decide keeps
+            # one definition of what an abstention is.
+            answer_parts: list[str] = []
             for token in self._generator.stream(prompt, results):
                 if first_token_ms is None:
                     first_token_ms = (time.perf_counter() - generation_start) * 1000
                 token_count += 1
+                answer_parts.append(token)
                 yield {"type": "token", "data": token}
             generation_ms = (time.perf_counter() - generation_start) * 1000
 
@@ -245,6 +254,7 @@ class RAGService:
             "data": {
                 "request_id": request_id,
                 "retriever": retriever,
+                "abstained": is_abstention("".join(answer_parts)),
                 "retrieval_latency_ms": round(retrieval_ms, 1),
                 "generation_latency_ms": round(generation_ms, 1),
                 "total_latency_ms": round(retrieval_ms + generation_ms, 1),
@@ -274,6 +284,22 @@ class RAGService:
     # ------------------------------------------------------------------
     # Metrics
     # ------------------------------------------------------------------
+
+    @property
+    def retriever(self):
+        """The retriever, for callers that evaluate it directly.
+
+        Evaluation drives the retriever without the generator — measuring
+        retrieval quality must not cost an LLM call.
+        """
+        return self._retriever
+
+    def corpus_size(self) -> int:
+        """Indexed chunks, asked of the retriever rather than recounted here."""
+        return getattr(self._retriever, "corpus_size", lambda: 0)()
+
+    def document_count(self) -> int:
+        return getattr(self._retriever, "document_count", lambda: 0)()
 
     def get_metrics(self) -> dict:
         return self._metrics.as_dict()

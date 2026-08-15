@@ -78,6 +78,17 @@ class HybridRetriever:
         return cls(dense=dense, bm25=bm25)
 
     # ------------------------------------------------------------------
+    # Corpus
+    # ------------------------------------------------------------------
+
+    def corpus_size(self) -> int:
+        return self._bm25.ntotal
+
+    def document_count(self) -> int:
+        """Distinct source documents behind the indexed chunks."""
+        return len({c.document_id for c in self._bm25._chunks})
+
+    # ------------------------------------------------------------------
     # Core operation
     # ------------------------------------------------------------------
 

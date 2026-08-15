@@ -6,7 +6,9 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.openapi.utils import get_openapi
 
-from api.routers import health, query
+from api.rate_limit import TokenBucketLimiter, rate_limit_middleware
+from api.routers import config as config_router
+from api.routers import evaluation, health, prometheus, query
 from api.routers import stream
 from config.logging_config import get_logger
 from config.settings import DEFAULT_ALLOWED_ORIGINS
@@ -33,6 +35,11 @@ def resolve_allowed_origins(raw: str | None = None) -> List[str]:
             "Set an explicit allowlist in any deployment that costs money."
         )
     return origins
+
+# Generous enough that a person clicking around never notices, tight enough
+# that a script pointed at /query cannot run up a bill unattended.
+_RATE_PER_SECOND = float(os.environ.get("RATE_LIMIT_PER_SECOND", "1"))
+_BURST = float(os.environ.get("RATE_LIMIT_BURST", "10"))
 
 _TAGS_METADATA = [
     {
@@ -90,9 +97,21 @@ def create_app() -> FastAPI:
     )
     logger.info("CORS allowlist: %s", ", ".join(origins))
 
+    # Only the endpoints that spend Groq budget. A throttled health probe
+    # would take a healthy deployment out of rotation for free.
+    app.middleware("http")(
+        rate_limit_middleware(
+            TokenBucketLimiter(rate=_RATE_PER_SECOND, capacity=_BURST),
+            paths=("/query", "/stream"),
+        )
+    )
+
     app.include_router(health.router)
     app.include_router(query.router)
     app.include_router(stream.router)
+    app.include_router(config_router.router)
+    app.include_router(evaluation.router)
+    app.include_router(prometheus.router)
     return app
 
 

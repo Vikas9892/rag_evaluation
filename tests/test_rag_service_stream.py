@@ -176,7 +176,18 @@ class TestDonePayload:
             "total_latency_ms",
             "first_token_latency_ms",
             "pipeline",
+            "abstained",
         }
+
+    def test_reports_whether_the_model_abstained(self):
+        # The prompt names the exact sentence to reply with when the context
+        # cannot answer, so this is a contract check the server owns rather
+        # than something the client should infer from the text.
+        assert self._done()["abstained"] is False
+
+    def test_detects_the_abstention_sentinel(self):
+        service = build_service(generator=FakeGenerator(["I don't", " know."]))
+        assert drain(service)[-1]["data"]["abstained"] is True
 
     def test_carries_the_pipeline(self):
         stages = self._done()["pipeline"]

@@ -56,5 +56,6 @@ async def query_endpoint(
         ),
         request_id=result.request_id,
         retriever=result.retriever,
+        abstained=result.abstained,
         pipeline=[stage.as_dict() for stage in result.pipeline],
     )
