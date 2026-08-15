@@ -14,12 +14,13 @@ Default model: cross-encoder/ms-marco-MiniLM-L-6-v2
   — 22 M params, fast on CPU, strong on passage-retrieval benchmarks
 """
 from abc import ABC, abstractmethod
+from dataclasses import replace
 from typing import List
 
 from sentence_transformers import CrossEncoder
 
 from config.logging_config import get_logger
-from retrieval.ranking import RetrievalResult
+from retrieval.ranking import RetrievalResult, StageScore
 
 logger = get_logger(__name__)
 
@@ -64,7 +65,18 @@ class CrossEncoderReranker(BaseReranker):
             zip(results, scores), key=lambda x: float(x[1]), reverse=True
         )
         reranked = [
-            RetrievalResult(chunk=r.chunk, score=float(s), rank=i + 1)
+            RetrievalResult(
+                chunk=r.chunk,
+                score=float(s),
+                rank=i + 1,
+                # The earlier stages' opinions are kept, not overwritten. The
+                # retrieval table's whole purpose is showing that the reranker
+                # promoted a chunk dense had ninth — which is unanswerable if
+                # reranking discards what came before it.
+                trace=replace(
+                    r.trace, reranker=StageScore(score=float(s), rank=i + 1)
+                ),
+            )
             for i, (r, s) in enumerate(ranked[:top_k])
         ]
 

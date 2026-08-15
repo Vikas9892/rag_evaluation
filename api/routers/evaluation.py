@@ -37,6 +37,9 @@ router = APIRouter(tags=["evaluation"])
 #: Configurations the benchmark matrix sweeps.
 _BENCHMARK_TOP_K = (3, 5, 10)
 _BENCHMARK_RETRIEVERS: Tuple[RetrieverMode, ...] = ("dense", "sparse", "hybrid")
+# Whether the cross-encoder earns its latency is exactly the sort of question
+# this platform exists to answer, so it is swept rather than assumed.
+_BENCHMARK_RERANKER: Tuple[bool, ...] = (False, True)
 
 # An evaluation run embeds every question in the dataset, so the same request
 # twice would pay the same ~2 s twice. Results are pure functions of (dataset,
@@ -65,19 +68,23 @@ def _load_dataset():
         raise HTTPException(status_code=503, detail=f"Index not available: {exc}")
 
 
-def _evaluate(service: RAGService, top_k: int, retriever: RetrieverMode):
+def _evaluate(
+    service: RAGService, top_k: int, retriever: RetrieverMode, reranker: bool = False
+):
     """Retrieval metrics for one configuration."""
 
     dataset = _load_dataset()
 
     class _Bound:
-        """Pins the retriever mode, which RetrievalEvaluator does not know about."""
+        """Pins the configuration, which RetrievalEvaluator does not know about."""
 
         def __init__(self, inner):
             self._inner = inner
 
         def retrieve(self, question: str, top_k: int):
-            return self._inner.retrieve(question, top_k=top_k, mode=retriever)
+            return self._inner.retrieve(
+                question, top_k=top_k, mode=retriever, reranker=reranker
+            )
 
     evaluator = RetrievalEvaluator(_Bound(service.retriever), top_k=top_k)
     return evaluator.evaluate(dataset)
@@ -96,11 +103,13 @@ def _evaluate(service: RAGService, top_k: int, retriever: RetrieverMode):
 async def evaluation(
     top_k: int = Query(default=TOP_K, ge=1, le=20),
     retriever: RetrieverMode = Query(default="hybrid"),
+    reranker: bool = Query(default=False),
     service: RAGService = Depends(get_service),
 ) -> EvaluationResponse:
     t0 = time.perf_counter()
     (samples, aggregate), cached = _cached(
-        ("eval", top_k, retriever), lambda: _evaluate(service, top_k, retriever)
+        ("eval", top_k, retriever, reranker),
+        lambda: _evaluate(service, top_k, retriever, reranker),
     )
     elapsed = (time.perf_counter() - t0) * 1000
 
@@ -115,6 +124,7 @@ async def evaluation(
     return EvaluationResponse(
         top_k=top_k,
         retriever=retriever,
+        reranker=reranker,
         dataset_size=len(samples),
         cached=cached,
         metrics=RetrievalMetrics(
@@ -157,23 +167,26 @@ async def benchmarks(service: RAGService = Depends(get_service)) -> BenchmarkRes
 
     for retriever in _BENCHMARK_RETRIEVERS:
         for k in _BENCHMARK_TOP_K:
-            (samples, aggregate), cached = _cached(
-                ("eval", k, retriever), lambda r=retriever, kk=k: _evaluate(service, kk, r)
-            )
-            any_uncached = any_uncached or not cached
-            cells.append(
-                BenchmarkCell(
-                    retriever=retriever,
-                    top_k=k,
-                    metrics=RetrievalMetrics(
-                        precision_at_k=round(aggregate.precision_at_k, 4),
-                        recall_at_k=round(aggregate.recall_at_k, 4),
-                        hit_rate=round(aggregate.hit_rate, 4),
-                        mrr=round(aggregate.mrr, 4),
-                        avg_latency_ms=round(aggregate.avg_latency_ms, 1),
-                    ),
+            for rerank in _BENCHMARK_RERANKER:
+                (samples, aggregate), cached = _cached(
+                    ("eval", k, retriever, rerank),
+                    lambda r=retriever, kk=k, rr=rerank: _evaluate(service, kk, r, rr),
                 )
-            )
+                any_uncached = any_uncached or not cached
+                cells.append(
+                    BenchmarkCell(
+                        retriever=retriever,
+                        top_k=k,
+                        reranker=rerank,
+                        metrics=RetrievalMetrics(
+                            precision_at_k=round(aggregate.precision_at_k, 4),
+                            recall_at_k=round(aggregate.recall_at_k, 4),
+                            hit_rate=round(aggregate.hit_rate, 4),
+                            mrr=round(aggregate.mrr, 4),
+                            avg_latency_ms=round(aggregate.avg_latency_ms, 1),
+                        ),
+                    )
+                )
 
     dataset_size = len(_load_dataset())
     distinct_mrr = {round(c.metrics.mrr, 4) for c in cells}

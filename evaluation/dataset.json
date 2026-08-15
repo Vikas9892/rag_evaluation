@@ -122,5 +122,309 @@
       "Readers-Writers",
       "Dining Philosophers"
     ]
+  },
+  {
+    "id": 16,
+    "question": "Why is appending to a dynamic array O(1) amortised?",
+    "expected_answer": "A dynamic array grows geometrically, usually by doubling, so n appends cost O(n) copying in total spread across the appends.",
+    "expected_answer_spans": [
+      "Growth is\nusually geometric"
+    ]
+  },
+  {
+    "id": 17,
+    "question": "When do linked lists lose to arrays in practice?",
+    "expected_answer": "Each node is a separate allocation and traversal defeats the CPU cache, so linked lists underperform arrays more often than the asymptotics suggest.",
+    "expected_answer_spans": [
+      "traversal defeats the CPU cache"
+    ]
+  },
+  {
+    "id": 18,
+    "question": "How are hash table collisions resolved?",
+    "expected_answer": "By chaining, where each bucket holds a list, or by open addressing, where a probe sequence finds the next free slot.",
+    "expected_answer_spans": [
+      "Collisions are resolved by chaining"
+    ]
+  },
+  {
+    "id": 19,
+    "question": "What is the difference between an AVL tree and a red-black tree?",
+    "expected_answer": "An AVL tree rebalances aggressively and keeps height closer to optimal, favouring lookups. A red-black tree does fewer rotations per update, favouring writes.",
+    "expected_answer_spans": [
+      "An AVL tree rebalances aggressively"
+    ]
+  },
+  {
+    "id": 20,
+    "question": "Why is building a heap from n elements O(n) rather than O(n log n)?",
+    "expected_answer": "Most nodes are near the leaves and sift down only a little, so the total work is linear.",
+    "expected_answer_spans": [
+      "most nodes\nare near the leaves"
+    ]
+  },
+  {
+    "id": 21,
+    "question": "What makes a trie suitable for autocomplete?",
+    "expected_answer": "Every node on a path shares a common prefix, so prefix search is natural and lookup costs O(m) in the key length.",
+    "expected_answer_spans": [
+      "Every node on a path shares a common prefix"
+    ]
+  },
+  {
+    "id": 22,
+    "question": "When should a graph use an adjacency matrix instead of an adjacency list?",
+    "expected_answer": "An adjacency matrix uses O(V squared) space but answers edge existence in O(1), which suits dense graphs. An adjacency list uses O(V + E) and suits sparse graphs.",
+    "expected_answer_spans": [
+      "which suits dense graphs"
+    ]
+  },
+  {
+    "id": 23,
+    "question": "Why can no comparison sort beat O(n log n)?",
+    "expected_answer": "There are n factorial orderings and each comparison distinguishes at most two branches, so the decision tree has height at least log(n!), which is Theta(n log n).",
+    "expected_answer_spans": [
+      "the decision tree has\nheight at least"
+    ]
+  },
+  {
+    "id": 24,
+    "question": "When does quicksort degrade to O(n squared)?",
+    "expected_answer": "When the pivot is consistently poor. Randomised or median-of-three pivots make that case vanishingly unlikely.",
+    "expected_answer_spans": [
+      "degrades to O(n squared) when the pivot is consistently poor"
+    ]
+  },
+  {
+    "id": 25,
+    "question": "What is the classic overflow bug in binary search?",
+    "expected_answer": "Computing the midpoint as (low + high) / 2 overflows on large indices. Writing it as low + (high - low) / 2 avoids it.",
+    "expected_answer_spans": [
+      "The classic bug is computing the midpoint"
+    ]
+  },
+  {
+    "id": 26,
+    "question": "Why does Dijkstra's algorithm fail with negative edge weights?",
+    "expected_answer": "It finalises a vertex the first time it is reached and never revisits that decision. Bellman-Ford handles negative weights instead.",
+    "expected_answer_spans": [
+      "It fails with negative weights"
+    ]
+  },
+  {
+    "id": 27,
+    "question": "What is the difference between memoisation and tabulation?",
+    "expected_answer": "Memoisation is top-down, recursing naturally and caching results. Tabulation is bottom-up, filling a table in dependency order, which avoids recursion depth limits.",
+    "expected_answer_spans": [
+      "Memoisation is top-down"
+    ]
+  },
+  {
+    "id": 28,
+    "question": "Why is the 0/1 knapsack problem not solvable greedily?",
+    "expected_answer": "Taking the best value-per-weight item first can leave capacity that no remaining item fits, so it needs dynamic programming.",
+    "expected_answer_spans": [
+      "can leave capacity that no remaining item fits"
+    ]
+  },
+  {
+    "id": 29,
+    "question": "How does amortised analysis differ from average-case analysis?",
+    "expected_answer": "Amortised analysis averages across a sequence and holds for every sequence including adversarial ones. Average-case analysis averages over random inputs.",
+    "expected_answer_spans": [
+      "which averages over random inputs"
+    ]
+  },
+  {
+    "id": 30,
+    "question": "What makes partial failure the hard part of distributed systems?",
+    "expected_answer": "A request that times out may have been lost, may be queued, or may have already succeeded with the reply lost on the way back.",
+    "expected_answer_spans": [
+      "may have already succeeded with the reply lost"
+    ]
+  },
+  {
+    "id": 31,
+    "question": "What quorum condition guarantees a read sees the latest write?",
+    "expected_answer": "With N replicas, W writes and R reads, choosing W plus R greater than N guarantees the read and write sets overlap.",
+    "expected_answer_spans": [
+      "choosing W plus R greater than N"
+    ]
+  },
+  {
+    "id": 32,
+    "question": "Why are consensus clusters sized at odd numbers?",
+    "expected_answer": "A consensus round needs a majority quorum. Five nodes tolerate two failures, and a sixth tolerates no more while adding a vote to collect.",
+    "expected_answer_spans": [
+      "five\nnodes tolerate two failures"
+    ]
+  },
+  {
+    "id": 33,
+    "question": "What does the FLP result say about consensus?",
+    "expected_answer": "No deterministic algorithm can guarantee consensus in an asynchronous network with even one faulty process. Practical systems sidestep it with timeouts.",
+    "expected_answer_spans": [
+      "The FLP result proves"
+    ]
+  },
+  {
+    "id": 34,
+    "question": "What problem does consistent hashing solve?",
+    "expected_answer": "It places nodes and keys on a ring so adding or removing a node moves only the keys in one arc, rather than remapping everything as a plain modulo would.",
+    "expected_answer_spans": [
+      "Consistent hashing places nodes"
+    ]
+  },
+  {
+    "id": 35,
+    "question": "What is a cache stampede and how is it prevented?",
+    "expected_answer": "A popular key expires and every request misses at once, all hitting the database together. Request coalescing or randomised jitter on expiry prevents it.",
+    "expected_answer_spans": [
+      "A cache stampede occurs"
+    ]
+  },
+  {
+    "id": 36,
+    "question": "Why should message queue consumers be idempotent?",
+    "expected_answer": "Most systems provide at-least-once delivery, so processing the same message twice must be harmless.",
+    "expected_answer_spans": [
+      "which is why consumers should be idempotent"
+    ]
+  },
+  {
+    "id": 37,
+    "question": "What is an idempotency key?",
+    "expected_answer": "The client sends a unique identifier and the server records it, so a repeated request is recognised and ignored. This is what makes retries safe.",
+    "expected_answer_spans": [
+      "The usual implementation is an idempotency key"
+    ]
+  },
+  {
+    "id": 38,
+    "question": "Why should passwords not be stored under a fast hash like SHA-256?",
+    "expected_answer": "A GPU computes billions of SHA-256 hashes per second, so a leaked table of fast hashes is effectively a leaked table of passwords.",
+    "expected_answer_spans": [
+      "A GPU computes billions"
+    ]
+  },
+  {
+    "id": 39,
+    "question": "What is the difference between a salt and a pepper?",
+    "expected_answer": "A salt is a unique random value stored alongside each hash. A pepper is a secret added to every hash and kept outside the database.",
+    "expected_answer_spans": [
+      "A pepper is a secret added to every hash"
+    ]
+  },
+  {
+    "id": 40,
+    "question": "Why is asymmetric encryption used to establish a symmetric key rather than to encrypt data?",
+    "expected_answer": "Asymmetric encryption solves key distribution but is far slower, so it is used to agree a shared symmetric key for the bulk data.",
+    "expected_answer_spans": [
+      "It solves distribution and is far slower"
+    ]
+  },
+  {
+    "id": 41,
+    "question": "What is forward secrecy in TLS?",
+    "expected_answer": "A session key is derived ephemerally and discarded, so an attacker who later obtains the server's private key cannot decrypt recorded past traffic.",
+    "expected_answer_spans": [
+      "Forward secrecy means"
+    ]
+  },
+  {
+    "id": 42,
+    "question": "What is the difference between authentication and authorisation?",
+    "expected_answer": "Authentication establishes who a caller is; authorisation establishes what they may do. Checking only the first is how a user reads another user's records by changing an id.",
+    "expected_answer_spans": [
+      "Authentication establishes who a caller is"
+    ]
+  },
+  {
+    "id": 43,
+    "question": "What is the trade-off between session cookies and JWTs?",
+    "expected_answer": "A session cookie holds server-side state and can be revoked instantly. A JWT is self-contained and scales without a session store but cannot be revoked before expiry.",
+    "expected_answer_spans": [
+      "cannot be\nrevoked before expiry"
+    ]
+  },
+  {
+    "id": 44,
+    "question": "How is SQL injection properly prevented?",
+    "expected_answer": "Parameterised queries fix it completely by sending code and data separately. Escaping is a partial measure that fails on edge cases.",
+    "expected_answer_spans": [
+      "Parameterised\nqueries fix it completely"
+    ]
+  },
+  {
+    "id": 45,
+    "question": "How do you defend against a timing attack?",
+    "expected_answer": "Compare secrets with a constant-time function rather than an early-exit equality check.",
+    "expected_answer_spans": [
+      "A timing attack recovers secrets"
+    ]
+  },
+  {
+    "id": 46,
+    "question": "Why does embedding a whole document hurt retrieval?",
+    "expected_answer": "It averages every topic in the document into one vector that is close to nothing in particular, which is why retrieval operates on chunks.",
+    "expected_answer_spans": [
+      "averages every topic in it into one vector"
+    ]
+  },
+  {
+    "id": 47,
+    "question": "What does chunk overlap achieve?",
+    "expected_answer": "It repeats a window of text between neighbouring chunks so an answer spanning a boundary survives in at least one of them.",
+    "expected_answer_spans": [
+      "Overlap repeats a window of text"
+    ]
+  },
+  {
+    "id": 48,
+    "question": "What is dense retrieval weak at?",
+    "expected_answer": "Exact tokens. A rare identifier, error code or product name may be represented poorly, so a dense retriever can miss a chunk containing the literal string.",
+    "expected_answer_spans": [
+      "Its weakness is exact tokens"
+    ]
+  },
+  {
+    "id": 49,
+    "question": "Why does Reciprocal Rank Fusion use ranks instead of scores?",
+    "expected_answer": "Because a cosine similarity and a BM25 score are not on a comparable scale, using ranks avoids ever having to place them on one.",
+    "expected_answer_spans": [
+      "never have to be placed on the same scale"
+    ]
+  },
+  {
+    "id": 50,
+    "question": "Is hybrid retrieval always better than dense or sparse alone?",
+    "expected_answer": "No. Fusion gives each retriever an equal vote, so a substantially worse retriever drags the combined ranking down. It must be measured, not assumed.",
+    "expected_answer_spans": [
+      "Fusion is not automatically an improvement"
+    ]
+  },
+  {
+    "id": 51,
+    "question": "Why is a cross-encoder reranker applied only to the top candidates?",
+    "expected_answer": "It runs one forward pass per candidate, so reranking the whole corpus would be accurate and unusable. A cheap retriever produces a wide candidate list first.",
+    "expected_answer_spans": [
+      "Reranking the whole corpus would be"
+    ]
+  },
+  {
+    "id": 52,
+    "question": "Why can a low Precision@K be arithmetic rather than a failure?",
+    "expected_answer": "When a question has one relevant chunk and K is five, precision cannot exceed 0.2.",
+    "expected_answer_spans": [
+      "precision cannot exceed 0.2"
+    ]
+  },
+  {
+    "id": 53,
+    "question": "Why is ground truth anchored to positions fragile?",
+    "expected_answer": "Labels stored as chunk indices silently point at different text once the corpus is re-chunked, and every metric continues to compute without error.",
+    "expected_answer_spans": [
+      "Labels stored as chunk indices"
+    ]
   }
 ]

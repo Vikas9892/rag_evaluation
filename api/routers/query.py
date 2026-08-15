@@ -34,7 +34,10 @@ async def query_endpoint(
 
     try:
         result = service.answer(
-            request.question, top_k=request.top_k, retriever=request.retriever
+            request.question,
+            top_k=request.top_k,
+            retriever=request.retriever,
+            reranker=request.reranker,
         )
     except TimeoutError:
         raise HTTPException(status_code=504, detail="LLM request timed out")

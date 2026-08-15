@@ -55,7 +55,10 @@ async def stream_endpoint(
     def event_generator():
         try:
             for event in service.stream(
-                request.question, top_k=request.top_k, retriever=request.retriever
+                request.question,
+                top_k=request.top_k,
+                retriever=request.retriever,
+                reranker=request.reranker,
             ):
                 yield f"data: {json.dumps(event)}\n\n"
         except NotImplementedError as exc:

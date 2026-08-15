@@ -43,8 +43,16 @@ class MockRAGService:
         question: str,
         top_k: int | None = None,
         retriever: str = "hybrid",
+        reranker: bool = False,
     ) -> RAGResponse:
-        self.calls.append({"question": question, "top_k": top_k, "retriever": retriever})
+        self.calls.append(
+            {
+                "question": question,
+                "top_k": top_k,
+                "retriever": retriever,
+                "reranker": reranker,
+            }
+        )
         if self._raise_exc is not None:
             raise self._raise_exc
         return RAGResponse(

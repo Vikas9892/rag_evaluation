@@ -27,8 +27,10 @@ class StubRetriever:
     def __init__(self) -> None:
         self.calls: List[dict] = []
 
-    def retrieve(self, question: str, top_k: int, mode: str = "hybrid"):
-        self.calls.append({"question": question, "top_k": top_k, "mode": mode})
+    def retrieve(self, question: str, top_k: int, mode: str = "hybrid", reranker: bool = False):
+        self.calls.append(
+            {"question": question, "top_k": top_k, "mode": mode, "reranker": reranker}
+        )
         ids = [f"c{i}" for i in range(top_k)]
         return [RetrievalResult(chunk=_chunk(cid), score=1.0 - i / 10, rank=i + 1) for i, cid in enumerate(ids)]
 
@@ -169,13 +171,28 @@ class TestEvaluationCache:
 
         assert len(service.retriever.calls) > before
 
+    def test_the_reranker_flag_is_part_of_the_cache_key(self, client, service):
+        # Otherwise a reranked run would be served the unreranked result.
+        client.get("/evaluation")
+        before = len(service.retriever.calls)
+        client.get("/evaluation?reranker=true")
+
+        assert len(service.retriever.calls) > before
+
 
 class TestBenchmarks:
-    def test_sweeps_every_retriever_and_top_k(self, client):
+    def test_sweeps_every_retriever_top_k_and_reranker(self, client):
         cells = client.get("/benchmarks").json()["cells"]
-        assert len(cells) == 9
+        assert len(cells) == 18  # 3 retrievers x 3 top-K x reranker on/off
         assert {c["retriever"] for c in cells} == {"dense", "sparse", "hybrid"}
         assert {c["top_k"] for c in cells} == {3, 5, 10}
+        assert {c["reranker"] for c in cells} == {True, False}
+
+    def test_the_reranker_is_swept_rather_than_assumed(self, client, service):
+        # Whether the cross-encoder earns its latency is exactly the kind of
+        # question this platform exists to answer.
+        client.get("/benchmarks")
+        assert {c["reranker"] for c in service.retriever.calls} == {True, False}
 
     def test_reports_whether_the_matrix_discriminates(self, client):
         # Every configuration scoring the same means the corpus is being

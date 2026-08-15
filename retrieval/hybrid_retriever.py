@@ -10,7 +10,7 @@ very-high-ranked documents so neither retriever can dominate completely.
 import json
 import time
 from pathlib import Path
-from typing import List, Optional, Tuple
+from typing import TYPE_CHECKING, Callable, List, Optional, Tuple
 
 from config.logging_config import get_logger
 from config.settings import FAISS_INDEX_FILE, METADATA_FILE, TOP_K
@@ -24,7 +24,17 @@ from .retriever import Retriever
 
 logger = get_logger(__name__)
 
+if TYPE_CHECKING:  # pragma: no cover - import cycle only matters to type checkers
+    from .reranker import BaseReranker
+
 _RRF_K = 60  # constant from the original RRF paper
+
+
+def _default_reranker() -> "BaseReranker":
+    """Imported lazily: sentence-transformers is heavy and only reranking needs it."""
+    from .reranker import CrossEncoderReranker
+
+    return CrossEncoderReranker()
 
 
 class HybridRetriever:
@@ -41,10 +51,14 @@ class HybridRetriever:
         dense: Retriever,
         bm25: BM25Store,
         candidate_multiplier: int = 4,
+        reranker: Optional["BaseReranker"] = None,
+        reranker_factory: Optional[Callable[[], "BaseReranker"]] = None,
     ) -> None:
         self._dense = dense
         self._bm25 = bm25
         self._candidate_multiplier = candidate_multiplier
+        self._reranker = reranker
+        self._reranker_factory = reranker_factory
 
     # ------------------------------------------------------------------
     # Factory
@@ -92,11 +106,23 @@ class HybridRetriever:
     # Core operation
     # ------------------------------------------------------------------
 
+    def _get_reranker(self):
+        """Build the cross-encoder on first use.
+
+        Constructing it downloads and loads a model, so a deployment that never
+        asks for reranking never pays that cost.
+        """
+        if self._reranker is None:
+            factory = self._reranker_factory or _default_reranker
+            self._reranker = factory()
+        return self._reranker
+
     def retrieve(
         self,
         query: str,
         top_k: int = TOP_K,
         mode: RetrieverMode = "hybrid",
+        reranker: bool = False,
     ) -> List[RetrievalResult]:
         """Retrieve top_k chunks, recording what each stage contributed.
 
@@ -110,7 +136,9 @@ class HybridRetriever:
         exists for: *which* retriever found this, and where did the other one
         put it?
         """
-        results, _ = self.retrieve_traced(query, top_k=top_k, mode=mode)
+        results, _ = self.retrieve_traced(
+            query, top_k=top_k, mode=mode, reranker=reranker
+        )
         return results
 
     def retrieve_traced(
@@ -118,6 +146,7 @@ class HybridRetriever:
         query: str,
         top_k: int = TOP_K,
         mode: RetrieverMode = "hybrid",
+        reranker: bool = False,
     ) -> Tuple[List[RetrievalResult], List[PipelineStage]]:
         """Retrieve, and report which stages ran and what each cost.
 
@@ -128,25 +157,36 @@ class HybridRetriever:
         out from a result set.
         """
         if mode == "dense":
-            results, stages = self._dense.retrieve_traced(query, top_k=top_k)
-            return results, stages
+            # Retrieve wider when reranking, so the reranker has candidates to
+            # reorder. Handing it exactly top_k can only permute what the first
+            # stage already chose.
+            width = top_k * self._candidate_multiplier if reranker else top_k
+            results, stages = self._dense.retrieve_traced(query, top_k=width)
+            return self._maybe_rerank(query, results, stages, top_k, reranker)
 
         if mode == "sparse":
             t0 = time.perf_counter()
-            results = self._bm25.search(query, top_k=top_k)
+            width = top_k * self._candidate_multiplier if reranker else top_k
+            results = self._bm25.search(query, top_k=width)
             sparse_ms = (time.perf_counter() - t0) * 1000
-            return results, [
-                # BM25 matches terms, so nothing is embedded. This is the one
-                # stage the live pipeline genuinely skips by request.
-                PipelineStage.skipped("embedding"),
-                PipelineStage(
-                    name="sparse",
-                    status="ok",
-                    latency_ms=sparse_ms,
-                    candidates_in=self._bm25.ntotal,
-                    candidates_out=len(results),
-                ),
-            ]
+            return self._maybe_rerank(
+                query,
+                results,
+                [
+                    # BM25 matches terms, so nothing is embedded. This is the
+                    # one stage the live pipeline genuinely skips by request.
+                    PipelineStage.skipped("embedding"),
+                    PipelineStage(
+                        name="sparse",
+                        status="ok",
+                        latency_ms=sparse_ms,
+                        candidates_in=self._bm25.ntotal,
+                        candidates_out=len(results),
+                    ),
+                ],
+                top_k,
+                reranker,
+            )
 
         # Fusion needs a wider window than it returns: a chunk ranked 30th by
         # one retriever and 2nd by the other should still surface.
@@ -223,4 +263,36 @@ class HybridRetriever:
                 candidates_out=len(results),
             ),
         ]
-        return results, stages
+        return self._maybe_rerank(query, results, stages, top_k, reranker)
+
+    def _maybe_rerank(
+        self,
+        query: str,
+        results: List[RetrievalResult],
+        stages: List[PipelineStage],
+        top_k: int,
+        reranker: bool,
+    ) -> Tuple[List[RetrievalResult], List[PipelineStage]]:
+        """Run the cross-encoder if asked, and report the stage either way.
+
+        When it does not run, no reranker stage is reported at all and
+        `fill_skipped` marks it skipped — which is what the diagram greys out.
+        Reporting a zero-latency "ok" stage would claim it ran.
+        """
+        if not reranker:
+            return results[:top_k], stages
+
+        t0 = time.perf_counter()
+        reranked = self._get_reranker().rerank(query, results, top_k=top_k)
+        rerank_ms = (time.perf_counter() - t0) * 1000
+
+        return reranked, [
+            *stages,
+            PipelineStage(
+                name="reranker",
+                status="ok",
+                latency_ms=rerank_ms,
+                candidates_in=len(results),
+                candidates_out=len(reranked),
+            ),
+        ]

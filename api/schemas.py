@@ -45,8 +45,16 @@ class QueryRequest(BaseModel):
         le=20,
         description="Number of chunks to retrieve (higher → more context, more latency)",
     )
+    reranker: bool = Field(
+        default=False,
+        description=(
+            "Run the cross-encoder over the retrieved candidates. Far more accurate "
+            "per candidate and far slower — one model forward pass each — so it is "
+            "opt-in and the retriever fetches a wider candidate list when it is on."
+        ),
+    )
     retriever: Literal["dense", "sparse", "hybrid"] = Field(
-        default="hybrid",
+        default="dense",
         description=(
             "Retrieval strategy. 'dense' is embedding similarity alone, 'sparse' is "
             "BM25 keyword matching alone, 'hybrid' fuses both with Reciprocal Rank "
@@ -264,6 +272,7 @@ class PerQuestionResult(BaseModel):
 class EvaluationResponse(BaseModel):
     top_k: int
     retriever: Literal["dense", "sparse", "hybrid"]
+    reranker: bool = False
     dataset_size: int
     cached: bool = Field(description="Whether this run was served from the in-process cache")
     metrics: RetrievalMetrics
@@ -273,6 +282,7 @@ class EvaluationResponse(BaseModel):
 class BenchmarkCell(BaseModel):
     retriever: Literal["dense", "sparse", "hybrid"]
     top_k: int
+    reranker: bool = False
     metrics: RetrievalMetrics
 
 

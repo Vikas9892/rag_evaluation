@@ -163,8 +163,12 @@ class TestDatasetLoader:
         from evaluation.ground_truth import ChunkResolver
 
         samples = DatasetLoader.load(resolver=ChunkResolver.from_disk())
-        assert len(samples) == 15
+        # A floor, not an exact count: the dataset is meant to grow, and a test
+        # that has to be edited every time a question is added trains people to
+        # edit it without reading what else it asserts.
+        assert len(samples) >= 15
         assert all(s.expected_chunk_ids for s in samples)
+        assert len({s.id for s in samples}) == len(samples), "duplicate question ids"
 
 
 # ---------------------------------------------------------------------------

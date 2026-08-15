@@ -30,7 +30,7 @@ class RAGResponse:
     #: Which strategy ran. Without it a null stage in a chunk's trace is
     #: ambiguous: "sparse did not run" and "sparse missed this chunk" look
     #: identical from the chunk alone.
-    retriever: RetrieverMode = "hybrid"
+    retriever: RetrieverMode = "dense"
 
 
 @dataclass
@@ -112,7 +112,8 @@ class RAGService:
         self,
         question: str,
         top_k: Optional[int] = None,
-        retriever: RetrieverMode = "hybrid",
+        retriever: RetrieverMode = "dense",
+        reranker: bool = False,
     ) -> RAGResponse:
         request_id = str(uuid.uuid4())
         k = top_k if top_k is not None else self._default_top_k
@@ -120,7 +121,7 @@ class RAGService:
         try:
             t0 = time.perf_counter()
             results, retrieval_stages = self._retriever.retrieve_traced(
-                question, top_k=k, mode=retriever
+                question, top_k=k, mode=retriever, reranker=reranker
             )
             retrieval_ms = (time.perf_counter() - t0) * 1000
 
@@ -179,7 +180,8 @@ class RAGService:
         self,
         question: str,
         top_k: Optional[int] = None,
-        retriever: RetrieverMode = "hybrid",
+        retriever: RetrieverMode = "dense",
+        reranker: bool = False,
     ) -> Generator[dict, None, None]:
         """Yield SSE-ready event dicts: sources → tokens → done.
 
@@ -200,7 +202,7 @@ class RAGService:
         try:
             t0 = time.perf_counter()
             results, retrieval_stages = self._retriever.retrieve_traced(
-                question, top_k=k, mode=retriever
+                question, top_k=k, mode=retriever, reranker=reranker
             )
             retrieval_ms = (time.perf_counter() - t0) * 1000
 

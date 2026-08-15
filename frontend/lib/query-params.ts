@@ -35,8 +35,8 @@ export const TOP_K_DEFAULT = 5;
  * check a string at runtime. `tests/test_api_contract.py` fails if it stops
  * matching the Literal the API accepts.
  */
-export const RETRIEVERS = ["hybrid", "dense", "sparse"] as const;
-export const RETRIEVER_DEFAULT: RetrieverMode = "hybrid";
+export const RETRIEVERS = ["dense", "hybrid", "sparse"] as const;
+export const RETRIEVER_DEFAULT: RetrieverMode = "dense";
 
 /**
  * Read params from a URL, repairing anything unusable.

@@ -44,12 +44,14 @@ class FakeRetriever:
         self.last_mode: Optional[str] = None
 
     def retrieve(
-        self, question: str, top_k: int, mode: str = "hybrid"
+        self, question: str, top_k: int, mode: str = "hybrid", reranker: bool = False
     ) -> List[RetrievalResult]:
         results, _ = self.retrieve_traced(question, top_k, mode)
         return results
 
-    def retrieve_traced(self, question: str, top_k: int, mode: str = "hybrid"):
+    def retrieve_traced(
+        self, question: str, top_k: int, mode: str = "hybrid", reranker: bool = False
+    ):
         if self.raises:
             raise self.raises
         self.last_top_k = top_k
@@ -210,8 +212,9 @@ class TestDonePayload:
         assert generation["candidates_out"] is None
 
     def test_echoes_which_retriever_ran(self):
-        # Without this a null stage in a chunk's trace is ambiguous.
-        assert self._done()["retriever"] == "hybrid"
+        # Without this a null stage in a chunk's trace is ambiguous. The value
+        # is the service default, which the benchmark moved to dense.
+        assert self._done()["retriever"] == "dense"
 
     def test_total_is_the_sum_of_its_parts(self):
         done = self._done()
