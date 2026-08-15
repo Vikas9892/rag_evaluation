@@ -1,5 +1,8 @@
-import { PendingPanel } from "@/components/pending-panel";
+import { Suspense } from "react";
+
 import { PageHeader } from "@/components/layout/page-header";
+import { QueryPanel } from "@/components/query/query-panel";
+import { Skeleton } from "@/components/ui/skeleton";
 import { metadataFor, routeMeta } from "@/lib/page-meta";
 
 export const metadata = metadataFor("/query");
@@ -10,13 +13,14 @@ export default function QueryPage() {
   return (
     <>
       <PageHeader title={title} description={description} />
-      <PendingPanel milestone="Milestones 6–8">
-        Question input, streaming answer and the retrieval trace land here. The trace
-        needs per-stage attribution the API does not expose yet:{" "}
-        <code>HybridRetriever</code> fuses dense and sparse into a single score and
-        discards the component ranks, so the backend contract changes before this page can
-        show a Dense/BM25/Final breakdown.
-      </PendingPanel>
+      {/*
+        QueryPanel reads useSearchParams, which is only known at request time.
+        Without this boundary the whole route opts out of static rendering —
+        Next fails the build rather than doing it silently.
+      */}
+      <Suspense fallback={<Skeleton className="h-10 w-full" />}>
+        <QueryPanel />
+      </Suspense>
     </>
   );
 }
