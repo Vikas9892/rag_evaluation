@@ -92,7 +92,7 @@ hook. No page consumes these yet; the first real consumer is M8.
 |---|---|---|---|
 | 8 | Question input — autocomplete, history, clear | ✅ | `54b39df`, `b452fab` — `/query?q=…&top_k=10&retriever=dense` |
 | 9 | Streaming answer via `/stream` | ✅ | `7a929ea`, `e3484b9` |
-| 10 | Answer UI — answer, confidence, sources, latency | 🟡 | answer, latency, time-to-first-token and per-source attribution render; whether the model abstained does not — the API does not report it |
+| 10 | Answer UI — answer, confidence, sources, latency | ✅ | `abc2d66`, `d2fb86f` — abstention is a contract check on the reply the prompt demands, not an inference |
 
 M9 required a backend change: the SSE contract closed with a bare
 `{"type": "done"}`, so moving the UI onto `/stream` would have dropped the
@@ -181,25 +181,42 @@ smaller or cached embedding model, not a faster index.
 
 | # | Milestone | Status | Notes |
 |---|---|---|---|
-| 13 | Metrics cards — Precision@K, Recall, MRR, latency | ⬜ | |
-| 14 | Charts — bar, trend, benchmark comparison | ⬜ | |
-| 15 | Benchmark matrix — chunk size × top-K × retriever | ⛔ | **Corpus too small to discriminate** |
+| 13 | Metrics cards — Precision@K, Recall, MRR, latency | ✅ | `d2fb86f` |
+| 14 | Charts — bar, trend, benchmark comparison | ✅ | `d2fb86f` — single-series MRR bars; see the palette note under M12 for why nothing is coloured |
+| 15 | Benchmark matrix — chunk size × top-K × retriever | ✅ | `d2fb86f` — retriever × top-K; chunk size needs a re-index per cell and is not swept |
 
-**The M15 blocker.** At 19 chunks and 15 questions, MRR is already 1.00, so
-every configuration scores identically and the matrix would discriminate
-nothing. Precision@5 is structurally capped near 0.20–0.40 because each question
-has one or two relevant chunks while five are retrieved. Growing the corpus and
-dataset is a prerequisite, not a polish step.
+**The M15 blocker turned out not to hold, and that is worth recording.** It was
+written when MRR sat at 1.00 for everything. Since the heading-aware chunking and
+the sub-threshold merge, the matrix discriminates clearly:
+
+| retriever | MRR @5 | recall @5 |
+|---|---|---|
+| dense | **1.000** | 1.000 |
+| hybrid | 0.913 | 0.967 |
+| sparse | 0.806 | 0.900 |
+
+**Dense alone beats the hybrid retriever that is wired as the live default, on
+every metric.** BM25 drags fusion down: it is the half that misses, and RRF gives
+it an equal vote. This generalises the single anecdote from M11 across 15
+questions and 9 configurations.
+
+That is a product decision, not a code change to make unasked — switching the
+default is one line, and whether 15 questions justify it is your call. Precision@K
+remains structurally capped near 1/K and should not be read as a grade.
+
+The corpus is still small. A result this consistent across 9 configurations is a
+direction worth acting on; it is not yet a settled one, and the UI says so.
 
 ## Phase 7 — Backend improvements
 
 | # | Milestone | Status | Evidence |
 |---|---|---|---|
-| 16 | Caching (Redis) | ⬜ | no Redis dependency |
-| 17 | Structured logging — request ID, latency, retrieved chunks, token usage | 🟡 | per-request UUID in `services/rag_service.py`, surfaced as `QueryResponse.request_id`; not all fields logged structurally |
-| 18 | Prometheus metrics | ⬜ | `/metrics` is in-process JSON counters, not a Prometheus exposition |
-| 19 | Deep health checks — Groq, FAISS, disk, memory | ⬜ | `/health` returns `healthy` unconditionally (deliberate for load-balancer probes; the deep check is a separate endpoint) |
-| 20 | Rate limiting | ⬜ | retry/backoff exists in `generation/generator.py` for the Groq client; no API-level limiting |
+| 16 | Caching | ✅ | `abc2d66` — in-process, not Redis; see below |
+| — | *(deviation)* | | Redis was the plan. It would add a service to operate for a cache one process can hold, and the moment this runs on more than one process the FAISS index would have to be shared too — so the cache is not the first thing that needs distributing. Same argument for the rate limiter. |
+| 17 | Structured logging — request ID, latency, retrieved chunks, token usage | ✅ | `abc2d66` — request id, per-stage latency, chunk counts, tokens, retriever |
+| 18 | Prometheus metrics | ✅ | `abc2d66` — `/metrics/prometheus`, kept off the JSON `/metrics` the UI reads |
+| 19 | Deep health checks — Groq, FAISS, disk, memory | ✅ | `abc2d66` — `/health/deep`; separate from the liveness probe on purpose |
+| 20 | Rate limiting | ✅ | `abc2d66` — token bucket on `/query` and `/stream` only |
 
 ## Phase 8 — Deployment
 
@@ -249,23 +266,23 @@ These were raised before Milestone 2 and are still unanswered:
 3. **Dataset size.** ~50 questions was proposed to make benchmark comparisons
    less noisy.
 
-## Suggested next step
+## What is left
 
-**Grow the corpus.** Phase 5 is complete and Phase 6 is now the only unbuilt
-product surface, but all three of its milestones rest on a corpus that cannot
-support them. Four independent findings point the same way: MRR pinned at 1.00,
-BM25's IDF flooring to zero on a term in half the corpus, the hybrid-versus-dense
-disagreement being a single anecdote, and a 19-chunk index where dense search
-costs 2.6 ms — the index is not what makes retrieval slow, so growing it is
-close to free.
+Every milestone from 0 to 20 is built, and no page shows a placeholder. What
+remains is not implementation:
 
-That is a decision for you, not a task I should pick: it means choosing a
-document set and writing labelled questions for it, and open decisions 1 and 3
-are the same question.
-
-Cheaper and independent: **M10's remaining half**, whether the model abstained
-for lack of grounding. It needs the generator to report abstention rather than
-the UI guessing from the answer text.
+1. **Switch the default retriever to dense, or don't.** The benchmark says dense
+   beats hybrid on every metric over 15 questions. One line in
+   `api/dependencies.py`. It is a product call on whether 15 questions justify
+   it, so it has not been made.
+2. **Grow the corpus** (open decisions 1 and 3). 19 chunks is small enough that
+   BM25's IDF floors to zero on common terms, and dense search costs 2.6 ms — the
+   index is not the bottleneck, so growing it is close to free.
+3. **Wire the reranker, or delete it** (open decision 2). It is implemented,
+   costs ~500 ms on CPU, and every pipeline trace reports it skipped.
+4. **Phase 8** — the frontend is not deployed. The backend runs on AWS Lambda.
+5. **Phase 10** — portfolio polish. Screenshots are now capturable headlessly;
+   the driver lives outside the repo.
 
 ---
 
