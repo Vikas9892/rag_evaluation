@@ -5,7 +5,8 @@ import {
   useCallback,
   useContext,
   useEffect,
-  useState,
+  useMemo,
+  useSyncExternalStore,
   type ReactNode,
 } from "react";
 
@@ -46,63 +47,121 @@ interface ThemeContextValue {
 
 const ThemeContext = createContext<ThemeContextValue | null>(null);
 
-function systemPrefersDark(): boolean {
-  if (typeof window === "undefined") return false;
-  return window.matchMedia("(prefers-color-scheme: dark)").matches;
+// ---------------------------------------------------------------------------
+// The stored choice, as an external store
+// ---------------------------------------------------------------------------
+//
+// The theme lives in localStorage and in the OS, neither of which React owns,
+// and the inline script has already applied it to the DOM before React exists.
+// Reading it in an effect and calling setState means rendering the wrong theme
+// once and correcting it — a cascading render on every page load. useSync-
+// ExternalStore subscribes to the real source instead, and its server snapshot
+// keeps hydration matching.
+
+const listeners = new Set<() => void>();
+
+/**
+ * The choice made this session, which outranks storage.
+ *
+ * localStorage can throw on write in private mode. Without this the choice
+ * would be written nowhere and immediately read back as "system", so clicking
+ * Dark would do nothing at all. Held in memory, the theme still applies for
+ * the session — it just does not survive a reload.
+ */
+let chosen: Theme | null = null;
+
+function readStored(): Theme {
+  if (chosen !== null) return chosen;
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (raw === "light" || raw === "dark" || raw === "system") return raw;
+  } catch {
+    /* private mode; fall back to system */
+  }
+  return "system";
 }
 
-function apply(theme: Theme): "light" | "dark" {
-  const dark = theme === "dark" || (theme === "system" && systemPrefersDark());
-  document.documentElement.classList.toggle("dark", dark);
-  // Tells the browser which scrollbars, form controls and canvas default to.
-  document.documentElement.style.colorScheme = dark ? "dark" : "light";
-  return dark ? "dark" : "light";
+// Cached because getSnapshot must return a referentially stable value: React
+// calls it during render and re-renders whenever the result differs, so
+// recomputing an equal-but-new value would loop.
+let themeSnapshot: Theme | null = null;
+let resolvedSnapshot: "light" | "dark" | null = null;
+
+function emit() {
+  themeSnapshot = null;
+  resolvedSnapshot = null;
+  for (const listener of listeners) listener();
 }
+
+function subscribe(listener: () => void): () => void {
+  listeners.add(listener);
+  // "system" tracks the OS, so an OS switch at sunset is a change to this
+  // store. An explicit light or dark choice ignores it, which getResolved
+  // handles by not consulting the query.
+  const media = window.matchMedia("(prefers-color-scheme: dark)");
+  media.addEventListener("change", emit);
+  return () => {
+    listeners.delete(listener);
+    media.removeEventListener("change", emit);
+  };
+}
+
+function getTheme(): Theme {
+  themeSnapshot ??= readStored();
+  return themeSnapshot;
+}
+
+function getResolved(): "light" | "dark" {
+  if (resolvedSnapshot === null) {
+    const theme = getTheme();
+    const dark =
+      theme === "dark" ||
+      (theme === "system" && window.matchMedia("(prefers-color-scheme: dark)").matches);
+    resolvedSnapshot = dark ? "dark" : "light";
+  }
+  return resolvedSnapshot;
+}
+
+/**
+ * On the server there is no localStorage and no OS preference.
+ *
+ * These must be constant: React renders with them and then re-renders with the
+ * client value, and a mismatch between the two renders is a hydration error.
+ * The inline script means the DOM is already correct either way, so the brief
+ * disagreement is invisible.
+ */
+const serverTheme = (): Theme => "system";
+const serverResolved = (): "light" | "dark" => "light";
 
 export function ThemeProvider({ children }: { children: ReactNode }) {
-  // Starts at "system" on both server and client so the first render matches;
-  // the inline script has already applied the real theme to the DOM, and the
-  // effect below reconciles this state with it.
-  const [theme, setThemeState] = useState<Theme>("system");
-  const [resolved, setResolved] = useState<"light" | "dark">("light");
+  const theme = useSyncExternalStore(subscribe, getTheme, serverTheme);
+  const resolved = useSyncExternalStore(subscribe, getResolved, serverResolved);
 
+  // Pushing React's state out to the document element, which is exactly what
+  // an effect is for. The inline script did this before hydration; this keeps
+  // it true afterwards.
   useEffect(() => {
-    let stored: Theme = "system";
-    try {
-      const raw = localStorage.getItem(STORAGE_KEY);
-      if (raw === "light" || raw === "dark" || raw === "system") stored = raw;
-    } catch {
-      /* private mode; fall back to system */
-    }
-    setThemeState(stored);
-    setResolved(apply(stored));
-  }, []);
-
-  useEffect(() => {
-    // Only "system" tracks the OS. An explicit choice must not be overridden
-    // when the machine switches at sunset.
-    if (theme !== "system") return;
-    const media = window.matchMedia("(prefers-color-scheme: dark)");
-    const onChange = () => setResolved(apply("system"));
-    media.addEventListener("change", onChange);
-    return () => media.removeEventListener("change", onChange);
-  }, [theme]);
+    document.documentElement.classList.toggle("dark", resolved === "dark");
+    // Tells the browser which scrollbars, form controls and canvas default to.
+    document.documentElement.style.colorScheme = resolved;
+  }, [resolved]);
 
   const setTheme = useCallback((next: Theme) => {
-    setThemeState(next);
-    setResolved(apply(next));
+    chosen = next;
     try {
       localStorage.setItem(STORAGE_KEY, next);
     } catch {
-      /* the choice still applies for this session */
+      /* the choice still applies for this session; see `chosen` */
     }
+    emit();
   }, []);
 
-  return (
-    <ThemeContext.Provider value={{ theme, resolved, setTheme }}>
-      {children}
-    </ThemeContext.Provider>
+  const value = useMemo(
+    () => ({ theme, resolved, setTheme }),
+    [theme, resolved, setTheme],
   );
+
+  return <ThemeContext.Provider value={value}>{children}</ThemeContext.Provider>;
 }
 
 export function useTheme(): ThemeContextValue {
