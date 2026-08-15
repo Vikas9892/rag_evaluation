@@ -1,6 +1,8 @@
 import Link from "next/link";
 import type { ReactNode } from "react";
 
+import { ThemeToggle } from "@/components/theme/theme-toggle";
+
 import { HealthIndicator } from "./health-indicator";
 import { SidebarNav } from "./sidebar-nav";
 
@@ -31,6 +33,12 @@ export function AppShell({ children }: { children: ReactNode }) {
           </Link>
         </div>
         <SidebarNav />
+
+        {/* Pinned to the bottom of the sidebar: a preference, not a
+            destination, so it does not belong in the navigation list. */}
+        <div className="border-sidebar-border mt-auto border-t p-3">
+          <ThemeToggle />
+        </div>
       </aside>
 
       <div className="flex min-w-0 flex-1 flex-col">
@@ -38,8 +46,9 @@ export function AppShell({ children }: { children: ReactNode }) {
           <Link href="/" className="text-sm font-semibold md:hidden">
             RAG Evaluation
           </Link>
-          <div className="ml-auto text-xs">
+          <div className="ml-auto flex items-center gap-3 text-xs">
             <HealthIndicator />
+            <ThemeToggle className="md:hidden" />
           </div>
         </header>
 
