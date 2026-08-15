@@ -16,6 +16,8 @@ from config.logging_config import get_logger
 from config.settings import FAISS_INDEX_FILE, METADATA_FILE, TOP_K
 from chunking.chunk import Chunk
 
+from corpora import DEFAULT_CORPUS_ID, CorpusNotFoundError, corpus_layout
+
 from .bm25_store import BM25Store
 from .faiss_store import FAISSStore
 from .pipeline import PipelineStage
@@ -65,6 +67,21 @@ class HybridRetriever:
     # ------------------------------------------------------------------
 
     @classmethod
+    def from_corpus(cls, corpus_id: str = DEFAULT_CORPUS_ID) -> "HybridRetriever":
+        """Load one corpus into the same retrieval core the evaluation uses.
+
+        There is deliberately no second implementation for uploaded documents:
+        a workspace query and a benchmark run go through this class, so a
+        measured configuration is the configuration users actually get.
+        """
+        layout = corpus_layout(corpus_id)
+        if not layout.exists:
+            raise CorpusNotFoundError(f"Corpus {corpus_id!r} has not been indexed")
+        return cls.from_disk(
+            index_path=layout.faiss_path, metadata_path=layout.metadata_path
+        )
+
+    @classmethod
     def from_disk(
         cls,
         index_path: Path | str = FAISS_INDEX_FILE,
@@ -80,6 +97,7 @@ class HybridRetriever:
                 start_char=r["start_char"],
                 end_char=r["end_char"],
                 metadata=r["metadata"],
+                corpus_id=r.get("corpus_id", DEFAULT_CORPUS_ID),
             )
             for r in records
         ]

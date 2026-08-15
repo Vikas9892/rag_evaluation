@@ -55,6 +55,7 @@ class VectorStorage:
             {
                 "chunk_id": c.chunk_id,
                 "document_id": c.document_id,
+                "corpus_id": c.corpus_id,
                 "text": c.text,
                 "start_char": c.start_char,
                 "end_char": c.end_char,
@@ -92,6 +93,7 @@ class VectorStorage:
             {
                 "chunk_id": c.chunk_id,
                 "document_id": c.document_id,
+                "corpus_id": c.corpus_id,
                 "text": c.text,
                 "start_char": c.start_char,
                 "end_char": c.end_char,

@@ -8,6 +8,8 @@ from config.settings import FAISS_INDEX_FILE, METADATA_FILE, TOP_K
 from chunking.chunk import Chunk
 from embeddings.embedder import Embedder
 
+from corpora import DEFAULT_CORPUS_ID, CorpusNotFoundError, corpus_layout
+
 from .faiss_store import FAISSStore
 from .pipeline import PipelineStage
 from .ranking import RetrievalResult, RetrievalTrace, StageScore
@@ -36,6 +38,24 @@ class Retriever:
     # ------------------------------------------------------------------
     # Factory
     # ------------------------------------------------------------------
+
+    @classmethod
+    def from_corpus(
+        cls, corpus_id: str = DEFAULT_CORPUS_ID, embedder: Embedder | None = None
+    ) -> "Retriever":
+        """Load one corpus's index.
+
+        Raises CorpusNotFoundError rather than FileNotFoundError so a caller can
+        tell "this collection was never indexed" from "the disk is broken".
+        """
+        layout = corpus_layout(corpus_id)
+        if not layout.exists:
+            raise CorpusNotFoundError(f"Corpus {corpus_id!r} has not been indexed")
+        return cls.from_disk(
+            index_path=layout.faiss_path,
+            metadata_path=layout.metadata_path,
+            embedder=embedder,
+        )
 
     @classmethod
     def from_disk(
@@ -91,6 +111,7 @@ class Retriever:
                 start_char=rec["start_char"],
                 end_char=rec["end_char"],
                 metadata=rec["metadata"],
+                corpus_id=rec.get("corpus_id", DEFAULT_CORPUS_ID),
             )
             results.append(
                 RetrievalResult(
