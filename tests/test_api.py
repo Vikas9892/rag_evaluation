@@ -10,7 +10,7 @@ from fastapi import HTTPException
 from fastapi.testclient import TestClient
 
 from api.app import create_app
-from api.dependencies import get_service
+from api.dependencies import get_service, get_service_resolver
 from chunking.chunk import Chunk
 from retrieval.ranking import RetrievalResult
 from services.rag_service import RAGResponse
@@ -77,15 +77,29 @@ class MockRAGService:
 # Fixtures
 # ---------------------------------------------------------------------------
 
+def _raise_503_resolver(_corpus_id: str):
+    raise HTTPException(status_code=503, detail="Index not available")
+
+
 @pytest.fixture
 def mock_service() -> MockRAGService:
     return MockRAGService()
 
 
+def install_service(app, service) -> None:
+    """Point both the direct dependency and the per-corpus resolver at a double.
+
+    /metrics injects the service; /query and /stream resolve one from the
+    corpus named in the request, so a test has to override both.
+    """
+    app.dependency_overrides[get_service] = lambda: service
+    app.dependency_overrides[get_service_resolver] = lambda: (lambda _corpus: service)
+
+
 @pytest.fixture
 def client(mock_service: MockRAGService) -> TestClient:
     app = create_app()
-    app.dependency_overrides[get_service] = lambda: mock_service
+    install_service(app, mock_service)
     with TestClient(app) as c:
         yield c
 
@@ -248,6 +262,7 @@ class TestQueryErrorHandling:
 
         app = create_app()
         app.dependency_overrides[get_service] = raise_503
+        app.dependency_overrides[get_service_resolver] = lambda: _raise_503_resolver
         with TestClient(app) as c:
             resp = c.post("/query", json={"question": "test"})
         assert resp.status_code == 503
@@ -255,7 +270,7 @@ class TestQueryErrorHandling:
     def test_504_on_timeout_error(self) -> None:
         mock = MockRAGService(raise_exc=TimeoutError("LLM timed out"))
         app = create_app()
-        app.dependency_overrides[get_service] = lambda: mock
+        install_service(app, mock)
         with TestClient(app, raise_server_exceptions=False) as c:
             resp = c.post("/query", json={"question": "test"})
         assert resp.status_code == 504
@@ -263,7 +278,7 @@ class TestQueryErrorHandling:
     def test_500_on_unexpected_service_error(self) -> None:
         mock = MockRAGService(raise_exc=RuntimeError("Something broke"))
         app = create_app()
-        app.dependency_overrides[get_service] = lambda: mock
+        install_service(app, mock)
         with TestClient(app, raise_server_exceptions=False) as c:
             resp = c.post("/query", json={"question": "test"})
         assert resp.status_code == 500
@@ -272,8 +287,12 @@ class TestQueryErrorHandling:
         def raise_503():
             raise HTTPException(status_code=503, detail="custom message")
 
+        def raise_503_resolver(_corpus_id: str):
+            raise HTTPException(status_code=503, detail="custom message")
+
         app = create_app()
         app.dependency_overrides[get_service] = raise_503
+        app.dependency_overrides[get_service_resolver] = lambda: raise_503_resolver
         with TestClient(app) as c:
             resp = c.post("/query", json={"question": "test"})
         assert "custom message" in resp.json()["detail"]

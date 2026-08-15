@@ -45,6 +45,13 @@ class QueryRequest(BaseModel):
         le=20,
         description="Number of chunks to retrieve (higher → more context, more latency)",
     )
+    corpus_id: str = Field(
+        default="evaluation",
+        description=(
+            "Which indexed collection to search. Retrieval is scoped to exactly one, "
+            "so an uploaded document cannot be answered from another corpus."
+        ),
+    )
     reranker: bool = Field(
         default=False,
         description=(
@@ -176,6 +183,9 @@ class QueryResponse(BaseModel):
     generation_latency_ms: float = Field(description="Time spent on LLM call (ms)")
     total_latency_ms: float = Field(description="End-to-end latency (ms)")
     request_id: str = Field(description="UUID for request tracing in logs")
+    corpus_id: str = Field(
+        default="evaluation", description="The collection that was searched"
+    )
     abstained: bool = Field(
         default=False,
         description=(
@@ -308,3 +318,83 @@ class BenchmarkResponse(BaseModel):
         description="False when every configuration scores identically, which means the "
         "corpus is too small for the comparison to say anything about the retrievers"
     )
+
+
+# ---------------------------------------------------------------------------
+# Documents
+# ---------------------------------------------------------------------------
+
+
+class DocumentResponse(BaseModel):
+    """One uploaded document and where it is in the pipeline."""
+
+    document_id: str
+    corpus_id: str
+    filename: str = Field(description="Sanitised for display; never a filesystem path")
+    content_type: str
+    size_bytes: int
+    status: Literal[
+        "UPLOADING", "QUEUED", "PARSING", "CHUNKING", "EMBEDDING", "INDEXING", "READY", "FAILED"
+    ] = Field(description="The worker's actual stage, not an invented progress step")
+    progress: float = Field(
+        description="0 to 1 through the pipeline. A failed document reports 0, because a "
+        "bar stopped part way reads as still working."
+    )
+    chunk_count: int = Field(description="Chunks indexed; 0 until the document is READY")
+    error: Optional[str] = Field(
+        default=None, description="Why indexing failed, in terms the uploader can act on"
+    )
+    created_at: str
+    updated_at: str
+
+
+class DocumentCreateResponse(BaseModel):
+    """Accepted for indexing — not yet indexed."""
+
+    document_id: str
+    job_id: str
+    corpus_id: str
+    status: str = Field(description="QUEUED; indexing happens on a worker")
+    filename: str
+    duplicate_of: Optional[str] = Field(
+        default=None,
+        description=(
+            "Set when a byte-identical file is already in this corpus. Nothing is "
+            "stored or indexed again and `document_id` is the existing document: "
+            "two copies of the same text would occupy two top-K slots and answer "
+            "the same question twice. `job_id` is empty because no work was queued."
+        ),
+    )
+
+
+class DocumentListResponse(BaseModel):
+    corpus_id: Optional[str] = None
+    documents: List[DocumentResponse]
+
+
+class CorpusSummary(BaseModel):
+    """One collection, and whether it can be searched."""
+
+    corpus_id: str
+    documents: int
+    chunks: int
+    ready: bool = Field(description="Whether an index exists to query")
+    is_evaluation: bool = Field(
+        description="The corpus the benchmark measures. Kept separate so uploads "
+        "cannot move a published metric."
+    )
+
+
+class CorpusListResponse(BaseModel):
+    corpora: List[CorpusSummary]
+
+
+class QueueStatusResponse(BaseModel):
+    """What the queue is, and what it does not guarantee."""
+
+    backend: Literal["in-process", "redis"]
+    durable: bool = Field(
+        description="False for the in-process queue: jobs are lost if the API restarts"
+    )
+    workers: int
+    note: str

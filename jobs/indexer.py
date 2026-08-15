@@ -9,7 +9,7 @@ the same code.
 import time
 from dataclasses import dataclass
 from pathlib import Path
-from typing import List, Optional
+from typing import Callable, List, Optional
 
 import numpy as np
 
@@ -62,11 +62,16 @@ class DocumentIndexer:
         embedder: Optional[Embedder] = None,
         splitter: Optional[DocumentSplitter] = None,
         cleaner: Optional[TextCleaner] = None,
+        on_indexed: Optional[Callable[[str], None]] = None,
     ) -> None:
         self._repo = repository
         self._embedder = embedder
         self._splitter = splitter
         self._cleaner = cleaner or TextCleaner()
+        # Called with the corpus id after a successful index, so whoever caches
+        # loaded retrievers can drop the stale one. Injected rather than
+        # imported, to keep the worker independent of the API layer.
+        self._on_indexed = on_indexed
 
     # ------------------------------------------------------------------
 
@@ -101,6 +106,8 @@ class DocumentIndexer:
         self._repo.set_status(
             job.document_id, DocumentStatus.READY, chunk_count=len(chunks)
         )
+        if self._on_indexed is not None:
+            self._on_indexed(job.corpus_id)
         logger.info(
             "Indexed %s into corpus %s: %d chunks (%s)",
             document.filename,

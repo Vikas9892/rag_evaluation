@@ -13,10 +13,12 @@ and report the failure alongside it rather than discarding a partial answer.
 """
 import json
 
+from typing import Callable
+
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import StreamingResponse
 
-from api.dependencies import get_service
+from api.dependencies import get_service_resolver
 from api.schemas import QueryRequest
 from config.logging_config import get_logger
 from services.rag_service import RAGService
@@ -47,8 +49,9 @@ _SSE_HEADERS = {
 )
 async def stream_endpoint(
     request: QueryRequest,
-    service: RAGService = Depends(get_service),
+    resolve_service: Callable[[str], RAGService] = Depends(get_service_resolver),
 ) -> StreamingResponse:
+    service = resolve_service(request.corpus_id)
     if not request.question.strip():
         raise HTTPException(status_code=400, detail="Question cannot be empty or whitespace")
 

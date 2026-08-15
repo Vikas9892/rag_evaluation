@@ -6,7 +6,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from api.app import create_app
-from api.dependencies import get_service
+from api.dependencies import get_service, get_service_resolver
 from chunking.chunk import Chunk
 from retrieval.ranking import RetrievalResult
 
@@ -74,7 +74,9 @@ class MockErrorService:
 @pytest.fixture
 def client():
     app = create_app()
-    app.dependency_overrides[get_service] = lambda: MockStreamingService()
+    service = MockStreamingService()
+    app.dependency_overrides[get_service] = lambda: service
+    app.dependency_overrides[get_service_resolver] = lambda: (lambda _corpus: service)
     with TestClient(app) as c:
         yield c
 
@@ -82,7 +84,9 @@ def client():
 @pytest.fixture
 def error_client():
     app = create_app()
-    app.dependency_overrides[get_service] = lambda: MockErrorService()
+    service = MockErrorService()
+    app.dependency_overrides[get_service] = lambda: service
+    app.dependency_overrides[get_service_resolver] = lambda: (lambda _corpus: service)
     with TestClient(app) as c:
         yield c
 

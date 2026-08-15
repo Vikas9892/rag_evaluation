@@ -1,6 +1,8 @@
+from typing import Callable
+
 from fastapi import APIRouter, Depends, HTTPException
 
-from api.dependencies import get_service
+from api.dependencies import get_service_resolver
 from api.schemas import QueryRequest, QueryResponse, SourceInfo
 from config.logging_config import get_logger
 from services.rag_service import RAGService, source_payload
@@ -27,8 +29,10 @@ router = APIRouter(tags=["query"])
 )
 async def query_endpoint(
     request: QueryRequest,
-    service: RAGService = Depends(get_service),
+    resolve_service: Callable[[str], RAGService] = Depends(get_service_resolver),
 ) -> QueryResponse:
+    # Which corpus to load is part of what was asked, so it comes from the body.
+    service = resolve_service(request.corpus_id)
     if not request.question.strip():
         raise HTTPException(status_code=400, detail="Question cannot be empty or whitespace")
 
@@ -59,6 +63,7 @@ async def query_endpoint(
         ),
         request_id=result.request_id,
         retriever=result.retriever,
+        corpus_id=request.corpus_id,
         abstained=result.abstained,
         pipeline=[stage.as_dict() for stage in result.pipeline],
     )

@@ -6,9 +6,10 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.openapi.utils import get_openapi
 
+from api.dependencies import start_indexing_worker, stop_indexing_worker
 from api.rate_limit import TokenBucketLimiter, rate_limit_middleware
 from api.routers import config as config_router
-from api.routers import evaluation, health, prometheus, query
+from api.routers import documents, evaluation, health, prometheus, query
 from api.routers import stream
 from config.logging_config import get_logger
 from config.settings import DEFAULT_ALLOWED_ORIGINS
@@ -60,7 +61,11 @@ _TAGS_METADATA = [
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     logger.info("RAG API starting up")
+    # The worker starts with the app and stops with it, so a queued job is
+    # picked up without anyone running a second process.
+    start_indexing_worker()
     yield
+    stop_indexing_worker()
     logger.info("RAG API shutting down")
 
 
@@ -112,6 +117,7 @@ def create_app() -> FastAPI:
     app.include_router(config_router.router)
     app.include_router(evaluation.router)
     app.include_router(prometheus.router)
+    app.include_router(documents.router)
     return app
 
 
