@@ -10,6 +10,7 @@ what this application actually needs: the evaluation corpus stays reproducible
 while people upload their own documents beside it.
 """
 
+from .index_manager import RemovalResult, chunk_count, remove_document
 from .layout import (
     DEFAULT_CORPUS_ID,
     CorpusLayout,
@@ -21,6 +22,9 @@ from .layout import (
 )
 
 __all__ = [
+    "RemovalResult",
+    "chunk_count",
+    "remove_document",
     "DEFAULT_CORPUS_ID",
     "CorpusLayout",
     "CorpusNotFoundError",

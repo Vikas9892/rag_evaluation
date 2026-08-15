@@ -9,8 +9,15 @@ from generation.generator import GroqGenerator
 from generation.prompt_builder import PromptBuilder
 from corpora import DEFAULT_CORPUS_ID, CorpusNotFoundError, is_valid_corpus_id
 from retrieval.hybrid_retriever import HybridRetriever
-from documents import DocumentRepository
-from jobs import DocumentIndexer, InProcessQueue, JobQueue, RedisQueue
+from documents import DocumentRepository, DocumentStatus
+from jobs import (
+    DocumentIndexer,
+    IndexingJob,
+    InProcessQueue,
+    JobQueue,
+    RedisQueue,
+    new_job_id,
+)
 from services.rag_service import RAGService
 
 logger = get_logger(__name__)
@@ -131,11 +138,37 @@ def get_indexing_queue() -> JobQueue:
 
 
 def start_indexing_worker() -> None:
-    """Begin draining the queue. Called once, at application startup."""
-    indexer = DocumentIndexer(
-        get_document_repository(), on_indexed=invalidate_service_cache
-    )
-    get_indexing_queue().start(indexer.handle)
+    """Begin draining the queue, and recover anything a restart stranded.
+
+    The in-process queue holds jobs in memory, so a restart loses whatever had
+    not finished — a document would sit at EMBEDDING forever with nothing coming
+    to move it. The *records* are durable even when the queue is not, so startup
+    requeues every document that is neither READY nor FAILED.
+
+    Re-running a half-finished job is safe by construction: indexing writes the
+    document's chunks and rebuilds the index from scratch, so the second run
+    produces the same result as the first. With Redis this is unnecessary, and
+    harmless.
+    """
+    repository = get_document_repository()
+    queue = get_indexing_queue()
+    indexer = DocumentIndexer(repository, on_indexed=invalidate_service_cache)
+    queue.start(indexer.handle)
+
+    stranded = repository.unfinished()
+    for document in stranded:
+        # Reset the stage too, so a status poll stops claiming a stage that
+        # nothing is working on.
+        repository.set_status(document.document_id, DocumentStatus.QUEUED)
+        queue.enqueue(
+            IndexingJob(
+                job_id=new_job_id(),
+                document_id=document.document_id,
+                corpus_id=document.corpus_id,
+            )
+        )
+    if stranded:
+        logger.info("Requeued %d document(s) left unfinished by a restart", len(stranded))
 
 
 def stop_indexing_worker() -> None:

@@ -13,7 +13,11 @@ from typing import Optional
 
 from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile
 
-from api.dependencies import get_document_repository, get_indexing_queue
+from api.dependencies import (
+    get_document_repository,
+    get_indexing_queue,
+    invalidate_service_cache,
+)
 from api.schemas import (
     CorpusListResponse,
     CorpusSummary,
@@ -25,6 +29,7 @@ from api.schemas import (
 from config.logging_config import get_logger
 from corpora import (
     DEFAULT_CORPUS_ID,
+    remove_document,
     InvalidCorpusIdError,
     corpus_layout,
     is_valid_corpus_id,
@@ -225,10 +230,8 @@ async def document_status(
     status_code=200,
     summary="Delete a document",
     description=(
-        "Removes the record and the stored file. **The document's chunks stay in the "
-        "index until the corpus is rebuilt** — FAISS here is a flat index with no "
-        "delete, and silently leaving them while reporting success would be a lie. "
-        "The response says which applies."
+        "Removes the record, the stored file and the document's chunks. The corpus "
+        "index is rebuilt from the vectors already on disk, so nothing is re-embedded."
     ),
     responses={404: {"description": "No such document"}},
 )
@@ -248,18 +251,29 @@ async def delete_document(
         except OSError:
             logger.warning("Could not remove stored file for %s", document_id)
 
-    repository.delete(document_id)
+    try:
+        removal = remove_document(document.corpus_id, document_id)
+    except ValueError as exc:
+        # An inconsistent index is a real problem and must not be papered over
+        # by deleting the record and leaving the chunks orphaned.
+        logger.error("Refusing to remove %s: %s", document_id, exc)
+        raise HTTPException(status_code=409, detail=str(exc))
 
-    indexed = document.status is DocumentStatus.READY
+    repository.delete(document_id)
+    # The next query must not be answered by a retriever loaded before this.
+    invalidate_service_cache(document.corpus_id)
+
     return {
         "document_id": document_id,
         "deleted": True,
-        "chunks_still_indexed": document.chunk_count if indexed else 0,
+        "chunks_removed": removal.removed_chunks,
+        "chunks_remaining": removal.remaining_chunks,
+        "corpus_deleted": removal.corpus_deleted,
         "detail": (
-            "Record and file removed. Its chunks remain searchable until the corpus "
-            "is re-indexed."
-            if indexed
-            else "Record and file removed. Nothing was indexed."
+            "Document, file and chunks removed; the corpus was empty afterwards and "
+            "has been deleted."
+            if removal.corpus_deleted
+            else f"Document, file and {removal.removed_chunks} chunk(s) removed."
         ),
     }
 

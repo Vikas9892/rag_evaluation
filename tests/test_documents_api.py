@@ -254,20 +254,39 @@ class TestDeletion:
         assert client.delete(f"/documents/{document_id}").status_code == 200
         assert client.get(f"/documents/{document_id}").status_code == 404
 
-    def test_says_plainly_that_chunks_remain_indexed(self, client):
-        # FAISS here is a flat index with no delete. Reporting success while
-        # silently leaving the chunks searchable would be a lie.
+    def test_the_chunks_are_actually_removed(self, client):
+        # FAISS has no delete, so the index is rebuilt from the vectors already
+        # on disk. That costs no embedding, which is why this can be real
+        # deletion rather than a promise to clean up later.
         document_id = upload(client).json()["document_id"]
         body = client.delete(f"/documents/{document_id}").json()
 
-        assert body["chunks_still_indexed"] > 0
-        assert "re-indexed" in body["detail"]
+        assert body["chunks_removed"] > 0
+        assert body["chunks_remaining"] == 0
 
-    def test_a_document_that_never_indexed_claims_nothing_remains(self, client):
+    def test_removing_the_last_document_removes_the_corpus(self, client):
+        upload(client, corpus="solo")
+        document_id = client.get("/documents", params={"corpus_id": "solo"}).json()[
+            "documents"
+        ][0]["document_id"]
+
+        assert client.delete(f"/documents/{document_id}").json()["corpus_deleted"] is True
+        assert not corpus_layout("solo").exists
+
+    def test_other_documents_survive(self, client):
+        first = upload(client, name="a.md").json()["document_id"]
+        upload(client, content=SAMPLE + b"\n\n## More\n\nOther text.\n", name="b.md")
+
+        body = client.delete(f"/documents/{first}").json()
+
+        assert body["chunks_remaining"] > 0
+        assert body["corpus_deleted"] is False
+
+    def test_a_document_that_never_indexed_removes_no_chunks(self, client):
         document_id = upload(client, content=b"  ", name="blank.md").json()["document_id"]
         body = client.delete(f"/documents/{document_id}").json()
 
-        assert body["chunks_still_indexed"] == 0
+        assert body["chunks_removed"] == 0
 
     def test_deleting_an_unknown_document_is_404(self, client):
         assert client.delete("/documents/nope").status_code == 404

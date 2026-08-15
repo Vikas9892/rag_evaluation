@@ -180,6 +180,21 @@ class DocumentRepository:
             ).fetchone()
         return _to_document(row) if row else None
 
+    def unfinished(self) -> List[Document]:
+        """Documents left mid-pipeline, oldest first.
+
+        A document in PARSING or EMBEDDING when the process died is stuck: the
+        queue held the job in memory and nothing will pick it up again. These
+        are what startup requeues.
+        """
+        terminal = (DocumentStatus.READY.value, DocumentStatus.FAILED.value)
+        with self._connect() as conn:
+            rows = conn.execute(
+                "SELECT * FROM documents WHERE status NOT IN (?, ?) ORDER BY created_at",
+                terminal,
+            ).fetchall()
+        return [_to_document(r) for r in rows]
+
     def corpus_ids(self) -> List[str]:
         with self._connect() as conn:
             rows = conn.execute(
