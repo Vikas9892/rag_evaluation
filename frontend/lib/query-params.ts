@@ -1,3 +1,5 @@
+import type { RetrieverMode } from "@/types/api";
+
 /**
  * The query surface's state, as it appears in the URL.
  *
@@ -8,6 +10,7 @@
 export interface QueryParams {
   q: string;
   topK: number;
+  retriever: RetrieverMode;
 }
 
 /**
@@ -25,6 +28,17 @@ export const TOP_K_MAX = 20;
 export const TOP_K_DEFAULT = 5;
 
 /**
+ * Retrieval strategies, in the order the selector lists them.
+ *
+ * Declared here rather than imported from the generated schema because this
+ * array is also the runtime validator for an untrusted URL, and a type cannot
+ * check a string at runtime. `tests/test_api_contract.py` fails if it stops
+ * matching the Literal the API accepts.
+ */
+export const RETRIEVERS = ["hybrid", "dense", "sparse"] as const;
+export const RETRIEVER_DEFAULT: RetrieverMode = "hybrid";
+
+/**
  * Read params from a URL, repairing anything unusable.
  *
  * Never throws and never returns an out-of-range `topK`: these values come from
@@ -35,7 +49,16 @@ export function parseQueryParams(params: URLSearchParams): QueryParams {
   return {
     q: (params.get("q") ?? "").trim(),
     topK: parseTopK(params.get("top_k")),
+    retriever: parseRetriever(params.get("retriever")),
   };
+}
+
+function parseRetriever(raw: string | null): RetrieverMode {
+  // An unknown value falls back rather than reaching the API, which would
+  // answer 422 and surface a typo in the address bar as an error banner.
+  return (RETRIEVERS as readonly string[]).includes(raw ?? "")
+    ? (raw as RetrieverMode)
+    : RETRIEVER_DEFAULT;
 }
 
 function parseTopK(raw: string | null): number {
@@ -57,10 +80,11 @@ function parseTopK(raw: string | null): number {
  * `top_k` is omitted when it is the default so the common URL stays short and
  * two links to the same question compare equal.
  */
-export function buildQueryString({ q, topK }: QueryParams): string {
+export function buildQueryString({ q, topK, retriever }: QueryParams): string {
   const params = new URLSearchParams();
   if (q) params.set("q", q);
   if (topK !== TOP_K_DEFAULT) params.set("top_k", String(topK));
+  if (retriever !== RETRIEVER_DEFAULT) params.set("retriever", retriever);
   const encoded = params.toString();
   return encoded ? `?${encoded}` : "";
 }

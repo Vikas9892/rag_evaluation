@@ -3,6 +3,8 @@ import { describe, expect, it } from "vitest";
 import {
   buildQueryString,
   parseQueryParams,
+  RETRIEVERS,
+  RETRIEVER_DEFAULT,
   TOP_K_DEFAULT,
   TOP_K_MAX,
   TOP_K_MIN,
@@ -12,7 +14,11 @@ const parse = (search: string) => parseQueryParams(new URLSearchParams(search));
 
 describe("parseQueryParams", () => {
   it("reads a question and top_k", () => {
-    expect(parse("?q=what+is+ACID&top_k=8")).toEqual({ q: "what is ACID", topK: 8 });
+    expect(parse("?q=what+is+ACID&top_k=8")).toEqual({
+      q: "what is ACID",
+      topK: 8,
+      retriever: RETRIEVER_DEFAULT,
+    });
   });
 
   it("defaults an absent top_k", () => {
@@ -56,25 +62,72 @@ describe("parseQueryParams", () => {
 
 describe("buildQueryString", () => {
   it("omits top_k at its default so links to the same question compare equal", () => {
-    expect(buildQueryString({ q: "hello", topK: TOP_K_DEFAULT })).toBe("?q=hello");
+    expect(
+      buildQueryString({ q: "hello", topK: TOP_K_DEFAULT, retriever: RETRIEVER_DEFAULT }),
+    ).toBe("?q=hello");
   });
 
   it("includes a non-default top_k", () => {
-    expect(buildQueryString({ q: "hello", topK: 10 })).toBe("?q=hello&top_k=10");
+    expect(buildQueryString({ q: "hello", topK: 10, retriever: RETRIEVER_DEFAULT })).toBe(
+      "?q=hello&top_k=10",
+    );
   });
 
   it("returns an empty string when there is nothing to carry", () => {
-    expect(buildQueryString({ q: "", topK: TOP_K_DEFAULT })).toBe("");
+    expect(
+      buildQueryString({ q: "", topK: TOP_K_DEFAULT, retriever: RETRIEVER_DEFAULT }),
+    ).toBe("");
   });
 
   it("encodes characters that would otherwise break the URL", () => {
-    const encoded = buildQueryString({ q: "a&b=c?d #e", topK: TOP_K_DEFAULT });
+    const encoded = buildQueryString({
+      q: "a&b=c?d #e",
+      topK: TOP_K_DEFAULT,
+      retriever: RETRIEVER_DEFAULT,
+    });
     expect(encoded).not.toMatch(/[ #]/);
     expect(parse(encoded).q).toBe("a&b=c?d #e");
   });
 
   it("round-trips through parse", () => {
-    const original = { q: "What is a deadlock?", topK: 12 };
+    const original = { q: "What is a deadlock?", topK: 12, retriever: "sparse" as const };
+    expect(parse(buildQueryString(original))).toEqual(original);
+  });
+});
+
+describe("retriever", () => {
+  it.each(RETRIEVERS)("accepts %s", (mode) => {
+    expect(parse(`?retriever=${mode}`).retriever).toBe(mode);
+  });
+
+  it("defaults when absent", () => {
+    expect(parse("?q=hello").retriever).toBe(RETRIEVER_DEFAULT);
+  });
+
+  it.each([
+    ["an unknown strategy", "?retriever=magic"],
+    ["an empty value", "?retriever="],
+    ["a near miss", "?retriever=Hybrid"],
+  ])("falls back for %s rather than sending it to the API", (_label, search) => {
+    // The API answers an unknown strategy with 422; a typo in the address bar
+    // should not surface as an error banner.
+    expect(parse(search).retriever).toBe(RETRIEVER_DEFAULT);
+  });
+
+  it("is omitted from the URL at its default", () => {
+    expect(
+      buildQueryString({ q: "hello", topK: TOP_K_DEFAULT, retriever: RETRIEVER_DEFAULT }),
+    ).toBe("?q=hello");
+  });
+
+  it("is carried in the URL when chosen", () => {
+    expect(
+      buildQueryString({ q: "hello", topK: TOP_K_DEFAULT, retriever: "dense" }),
+    ).toBe("?q=hello&retriever=dense");
+  });
+
+  it("survives a round trip alongside top_k", () => {
+    const original = { q: "hello", topK: 12, retriever: "sparse" as const };
     expect(parse(buildQueryString(original))).toEqual(original);
   });
 });

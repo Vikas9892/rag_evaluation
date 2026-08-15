@@ -2,6 +2,7 @@ import type {
   HealthResponse,
   MetricsResponse,
   QueryResponse,
+  RetrieverMode,
   StreamEvent,
 } from "@/types/api";
 
@@ -130,12 +131,22 @@ export function postQuery(
   question: string,
   topK?: number,
   signal?: AbortSignal,
+  retriever?: RetrieverMode,
 ): Promise<QueryResponse> {
   return request<QueryResponse>("/query", {
     method: "POST",
-    body: JSON.stringify(topK === undefined ? { question } : { question, top_k: topK }),
+    body: JSON.stringify(requestBody(question, topK, retriever)),
     signal,
   });
+}
+
+/** Omits defaults so the request carries only what the caller chose. */
+function requestBody(question: string, topK?: number, retriever?: RetrieverMode) {
+  return {
+    question,
+    ...(topK === undefined ? {} : { top_k: topK }),
+    ...(retriever === undefined ? {} : { retriever }),
+  };
 }
 
 /**
@@ -149,13 +160,14 @@ export async function* streamQuery(
   question: string,
   topK?: number,
   signal?: AbortSignal,
+  retriever?: RetrieverMode,
 ): AsyncGenerator<StreamEvent> {
   let response: Response;
   try {
     response = await fetch(`${apiBaseUrl()}/stream`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(topK === undefined ? { question } : { question, top_k: topK }),
+      body: JSON.stringify(requestBody(question, topK, retriever)),
       signal,
     });
   } catch (cause) {

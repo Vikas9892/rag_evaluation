@@ -8,6 +8,7 @@ tests read the TypeScript source and fail when it stops agreeing with Pydantic.
 
 import re
 from pathlib import Path
+from typing import get_args
 
 import pytest
 
@@ -26,6 +27,14 @@ def _constant(name: str) -> int:
     match = re.search(rf"export const {name} = (\d+);", source)
     assert match, f"{name} is not exported from {QUERY_PARAMS_TS.name}"
     return int(match.group(1))
+
+
+def _ts_string_array(name: str) -> list[str]:
+    """Read `export const NAME = ["a", "b"] as const;` out of the TypeScript."""
+    source = QUERY_PARAMS_TS.read_text(encoding="utf-8")
+    match = re.search(rf"export const {name} = \[(.*?)\] as const;", source, re.S)
+    assert match, f"{name} is not exported from {QUERY_PARAMS_TS.name}"
+    return re.findall(r'"([^"]+)"', match.group(1))
 
 
 def _field_bound(kind: str) -> int:
@@ -99,3 +108,33 @@ class TestSourcePayloadMatchesSourceInfo:
         # "did not rank this chunk" and "scored zero" have to stay distinct.
         model = SourceInfo(**source_payload(self._result()))
         assert model.scores.reranker is None
+
+
+class TestRetrieverModes:
+    """The browser validates `retriever` before sending it, so the list exists twice.
+
+    An unknown strategy is a 422, and the frontend falls back to the default
+    rather than letting a mistyped URL surface as an error banner. That is only
+    correct while its list matches the one the API accepts.
+    """
+
+    @staticmethod
+    def _accepted() -> set:
+        annotation = QueryRequest.model_fields["retriever"].annotation
+        return set(get_args(annotation))
+
+    def test_frontend_lists_exactly_what_the_api_accepts(self):
+        assert set(_ts_string_array("RETRIEVERS")) == self._accepted()
+
+    def test_frontend_default_is_accepted(self):
+        source = QUERY_PARAMS_TS.read_text(encoding="utf-8")
+        match = re.search(r'RETRIEVER_DEFAULT: RetrieverMode = "([^"]+)"', source)
+        assert match, "RETRIEVER_DEFAULT is not exported"
+        assert match.group(1) in self._accepted()
+
+    def test_defaults_agree_across_the_boundary(self):
+        source = QUERY_PARAMS_TS.read_text(encoding="utf-8")
+        frontend_default = re.search(
+            r'RETRIEVER_DEFAULT: RetrieverMode = "([^"]+)"', source
+        ).group(1)
+        assert frontend_default == QueryRequest.model_fields["retriever"].default

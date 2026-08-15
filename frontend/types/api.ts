@@ -29,6 +29,8 @@ export type StreamEvent =
  */
 export interface StreamDone {
   request_id: string;
+  /** Which strategy actually ran — the authority for reading a null stage. */
+  retriever: RetrieverMode;
   retrieval_latency_ms: number;
   generation_latency_ms: number;
   total_latency_ms: number;

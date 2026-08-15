@@ -4,7 +4,7 @@ import { useQuery } from "@tanstack/react-query";
 
 import { streamQuery } from "@/services/api";
 import { ApiError } from "@/services/api-error";
-import type { StreamDone, StreamSource } from "@/types/api";
+import type { RetrieverMode, StreamDone, StreamSource } from "@/types/api";
 
 /**
  * An answer as it accumulates, plus whatever the stream has told us so far.
@@ -23,8 +23,11 @@ export interface RagAnswer {
 
 const EMPTY: RagAnswer = { answer: "", sources: [], complete: false, metrics: null };
 
-export function ragQueryKey(question: string, topK: number) {
-  return ["rag-query", question, topK] as const;
+export function ragQueryKey(question: string, topK: number, retriever: RetrieverMode) {
+  // The retriever is part of the identity of an answer, not a detail of how it
+  // was fetched: the same question under dense and under hybrid are two
+  // different results, and sharing a cache entry would show one as the other.
+  return ["rag-query", question, topK, retriever] as const;
 }
 
 /**
@@ -39,9 +42,9 @@ export function ragQueryKey(question: string, topK: number) {
  * The signal comes from react-query, so navigating away aborts the request
  * mid-stream instead of leaving the connection reading into a dead component.
  */
-export function useRagQuery(question: string, topK: number) {
+export function useRagQuery(question: string, topK: number, retriever: RetrieverMode) {
   return useQuery<RagAnswer>({
-    queryKey: ragQueryKey(question, topK),
+    queryKey: ragQueryKey(question, topK, retriever),
     queryFn: async ({ signal, client, queryKey }) => {
       let current: RagAnswer = EMPTY;
 
@@ -54,7 +57,7 @@ export function useRagQuery(question: string, topK: number) {
 
       publish({});
 
-      for await (const event of streamQuery(question, topK, signal)) {
+      for await (const event of streamQuery(question, topK, signal, retriever)) {
         switch (event.type) {
           case "sources":
             publish({ sources: event.data });
