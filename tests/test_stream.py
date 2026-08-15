@@ -32,7 +32,9 @@ def _fake_result() -> RetrievalResult:
 class MockStreamingService:
     """Yields a fixed event sequence: sources → two tokens → done."""
 
-    def stream(self, question: str, top_k: int | None = None) -> Generator[dict, None, None]:
+    def stream(
+        self, question: str, top_k: int | None = None, retriever: str = "hybrid"
+    ) -> Generator[dict, None, None]:
         yield {
             "type": "sources",
             "data": [
@@ -50,7 +52,9 @@ class MockStreamingService:
 class MockErrorService:
     """Raises NotImplementedError from stream() to simulate a non-streaming generator."""
 
-    def stream(self, question: str, top_k: int | None = None) -> Generator[dict, None, None]:
+    def stream(
+        self, question: str, top_k: int | None = None, retriever: str = "hybrid"
+    ) -> Generator[dict, None, None]:
         raise NotImplementedError("Generator does not support streaming")
         yield  # make it a generator
 

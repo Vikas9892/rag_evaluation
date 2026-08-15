@@ -54,7 +54,9 @@ async def stream_endpoint(
 
     def event_generator():
         try:
-            for event in service.stream(request.question, top_k=request.top_k):
+            for event in service.stream(
+                request.question, top_k=request.top_k, retriever=request.retriever
+            ):
                 yield f"data: {json.dumps(event)}\n\n"
         except NotImplementedError as exc:
             yield f"data: {json.dumps({'type': 'error', 'data': str(exc)})}\n\n"

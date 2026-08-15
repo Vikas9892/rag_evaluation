@@ -38,8 +38,13 @@ class MockRAGService:
         self.calls: list[dict] = []
         self._raise_exc = raise_exc
 
-    def answer(self, question: str, top_k: int | None = None) -> RAGResponse:
-        self.calls.append({"question": question, "top_k": top_k})
+    def answer(
+        self,
+        question: str,
+        top_k: int | None = None,
+        retriever: str = "hybrid",
+    ) -> RAGResponse:
+        self.calls.append({"question": question, "top_k": top_k, "retriever": retriever})
         if self._raise_exc is not None:
             raise self._raise_exc
         return RAGResponse(
@@ -48,6 +53,7 @@ class MockRAGService:
             retrieval_latency_ms=5.0,
             generation_latency_ms=120.0,
             request_id="test-request-id-abc123",
+            retriever=retriever,
         )
 
     def get_metrics(self) -> dict:

@@ -40,11 +40,15 @@ class FakeRetriever:
         self.results = [_result(0), _result(1)] if results is None else results
         self.raises = raises
         self.last_top_k: Optional[int] = None
+        self.last_mode: Optional[str] = None
 
-    def retrieve(self, question: str, top_k: int) -> List[RetrievalResult]:
+    def retrieve(
+        self, question: str, top_k: int, mode: str = "hybrid"
+    ) -> List[RetrievalResult]:
         if self.raises:
             raise self.raises
         self.last_top_k = top_k
+        self.last_mode = mode
         return self.results
 
 
@@ -100,11 +104,20 @@ class TestEventSequence:
 
     def test_sources_carry_attribution_and_score(self):
         source = drain(build_service())[0]["data"][0]
-        assert source == {
-            "document_id": "doc",
-            "chunk_id": "doc_chunk_0",
-            "score": pytest.approx(0.9),
-        }
+        assert source["document_id"] == "doc"
+        assert source["chunk_id"] == "doc_chunk_0"
+        assert source["score"] == pytest.approx(0.9)
+        assert source["rank"] == 1
+
+    def test_sources_carry_the_chunk_text(self):
+        # The retrieval table has to show what was retrieved; an id alone is
+        # not inspectable.
+        source = drain(build_service())[0]["data"][0]
+        assert source["text"] == "Durability means committed data survives a crash."
+
+    def test_sources_carry_a_per_stage_breakdown(self):
+        source = drain(build_service())[0]["data"][0]
+        assert set(source["scores"]) == {"dense", "sparse", "fused", "reranker"}
 
     def test_top_k_reaches_the_retriever(self):
         retriever = FakeRetriever()
@@ -115,6 +128,11 @@ class TestEventSequence:
         retriever = FakeRetriever()
         drain(build_service(retriever=retriever))
         assert retriever.last_top_k == 5
+
+    def test_retriever_choice_reaches_the_retriever(self):
+        retriever = FakeRetriever()
+        drain(build_service(retriever=retriever), retriever="sparse")
+        assert retriever.last_mode == "sparse"
 
 
 # ---------------------------------------------------------------------------
@@ -138,11 +156,16 @@ class TestDonePayload:
         done = self._done()
         assert set(done) == {
             "request_id",
+            "retriever",
             "retrieval_latency_ms",
             "generation_latency_ms",
             "total_latency_ms",
             "first_token_latency_ms",
         }
+
+    def test_echoes_which_retriever_ran(self):
+        # Without this a null stage in a chunk's trace is ambiguous.
+        assert self._done()["retriever"] == "hybrid"
 
     def test_total_is_the_sum_of_its_parts(self):
         done = self._done()

@@ -1,4 +1,4 @@
-from typing import List
+from typing import Dict, List, Literal, Optional
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -45,12 +45,57 @@ class QueryRequest(BaseModel):
         le=20,
         description="Number of chunks to retrieve (higher → more context, more latency)",
     )
+    retriever: Literal["dense", "sparse", "hybrid"] = Field(
+        default="hybrid",
+        description=(
+            "Retrieval strategy. 'dense' is embedding similarity alone, 'sparse' is "
+            "BM25 keyword matching alone, 'hybrid' fuses both with Reciprocal Rank "
+            "Fusion. Comparing them is the point of the platform, so it is chosen "
+            "per request rather than per deployment."
+        ),
+    )
+
+
+class StageScore(BaseModel):
+    """One retrieval stage's opinion of one chunk."""
+
+    score: float = Field(
+        description=(
+            "The stage's own units — cosine similarity for dense, BM25 for sparse, "
+            "an RRF sum for fusion. Not comparable across stages."
+        )
+    )
+    rank: int = Field(description="1-indexed position within that stage's results")
+
+
+class SourceScores(BaseModel):
+    """Per-stage attribution for one chunk.
+
+    A stage is null when it did not rank this chunk — either it did not run, or
+    it ran and the chunk fell outside its candidate window. Which applies is
+    resolved by `QueryResponse.retriever`, which reports what actually executed.
+
+    Null never means "scored zero". BM25 scores zero for a chunk with no term
+    overlap, and that is a measurement; absence is not.
+    """
+
+    dense: Optional[StageScore] = Field(default=None, description="Embedding similarity")
+    sparse: Optional[StageScore] = Field(default=None, description="BM25 keyword match")
+    fused: Optional[StageScore] = Field(default=None, description="Reciprocal Rank Fusion")
+    reranker: Optional[StageScore] = Field(default=None, description="Cross-encoder rerank")
 
 
 class SourceInfo(BaseModel):
     document_id: str = Field(description="Source document identifier")
     chunk_id: str = Field(description="Unique chunk identifier within the document")
-    score: float = Field(description="Cosine-similarity score in [0, 1]")
+    score: float = Field(description="Final score, in the units of the last stage to rank it")
+    rank: int = Field(default=0, description="1-indexed final position")
+    text: str = Field(default="", description="The retrieved chunk itself")
+    metadata: Dict = Field(default_factory=dict, description="Chunk metadata, e.g. heading")
+    scores: SourceScores = Field(
+        default_factory=SourceScores,
+        description="How each retrieval stage scored this chunk",
+    )
 
 
 class HealthResponse(BaseModel):
@@ -95,3 +140,10 @@ class QueryResponse(BaseModel):
     generation_latency_ms: float = Field(description="Time spent on LLM call (ms)")
     total_latency_ms: float = Field(description="End-to-end latency (ms)")
     request_id: str = Field(description="UUID for request tracing in logs")
+    retriever: Literal["dense", "sparse", "hybrid"] = Field(
+        default="hybrid",
+        description=(
+            "Which strategy ran. Needed to read `sources[].scores`: it tells a "
+            "null stage that did not run apart from one that missed a chunk."
+        ),
+    )

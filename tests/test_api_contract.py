@@ -11,8 +11,11 @@ from pathlib import Path
 
 import pytest
 
-from api.schemas import QueryRequest
+from api.schemas import QueryRequest, SourceInfo
+from chunking.chunk import Chunk
 from config.settings import BASE_DIR
+from retrieval.ranking import RetrievalResult, RetrievalTrace, StageScore
+from services.rag_service import source_payload
 
 QUERY_PARAMS_TS = BASE_DIR / "frontend" / "lib" / "query-params.ts"
 
@@ -51,3 +54,48 @@ class TestTopKBounds:
         # Cheap, but it is the one combination that would let a valid-looking
         # default produce a request the API rejects.
         assert _field_bound("ge") <= _constant("TOP_K_DEFAULT") <= _field_bound("le")
+
+
+class TestSourcePayloadMatchesSourceInfo:
+    """The streaming and non-streaming paths must describe a chunk identically.
+
+    POST /query builds `SourceInfo(**source_payload(r))`, while /stream puts
+    `source_payload(r)` straight on the wire. The frontend types the stream's
+    sources as the generated SourceInfo on the strength of that. If the two ever
+    diverge, the browser would be reading one shape and typed for another —
+    silently, because SSE payloads are not in the OpenAPI schema.
+    """
+
+    @staticmethod
+    def _result() -> RetrievalResult:
+        return RetrievalResult(
+            chunk=Chunk(
+                chunk_id="doc_chunk_0",
+                document_id="doc",
+                text="Durability means committed data survives a crash.",
+                start_char=0,
+                end_char=48,
+                metadata={"heading": "ACID"},
+            ),
+            score=0.42,
+            rank=1,
+            trace=RetrievalTrace(
+                dense=StageScore(score=0.9, rank=1),
+                fused=StageScore(score=0.42, rank=1),
+            ),
+        )
+
+    def test_payload_keys_are_exactly_source_info_fields(self):
+        assert set(source_payload(self._result())) == set(SourceInfo.model_fields)
+
+    def test_payload_validates_as_source_info(self):
+        model = SourceInfo(**source_payload(self._result()))
+        assert model.chunk_id == "doc_chunk_0"
+        assert model.scores.dense is not None
+        assert model.scores.sparse is None
+
+    def test_a_missing_stage_survives_validation_as_null(self):
+        # Pydantic must not coerce an absent stage into a zero-valued object;
+        # "did not rank this chunk" and "scored zero" have to stay distinct.
+        model = SourceInfo(**source_payload(self._result()))
+        assert model.scores.reranker is None

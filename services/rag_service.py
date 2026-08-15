@@ -8,7 +8,7 @@ from config.logging_config import get_logger
 from config.settings import TOP_K
 from generation.generator import BaseGenerator
 from generation.prompt_builder import PromptBuilder
-from retrieval.ranking import RetrievalResult
+from retrieval.ranking import RetrievalResult, RetrieverMode
 from retrieval.retriever import Retriever
 
 logger = get_logger(__name__)
@@ -21,6 +21,10 @@ class RAGResponse:
     retrieval_latency_ms: float
     generation_latency_ms: float
     request_id: str
+    #: Which strategy ran. Without it a null stage in a chunk's trace is
+    #: ambiguous: "sparse did not run" and "sparse missed this chunk" look
+    #: identical from the chunk alone.
+    retriever: RetrieverMode = "hybrid"
 
 
 @dataclass
@@ -47,6 +51,33 @@ class _ServiceMetrics:
         }
 
 
+def _stage_payload(stage) -> Optional[dict]:
+    return None if stage is None else {"score": stage.score, "rank": stage.rank}
+
+
+def source_payload(result: RetrievalResult) -> dict:
+    """Wire form of one retrieved chunk, including its per-stage trace.
+
+    Shared by the streaming and non-streaming paths so the two cannot describe
+    the same chunk differently. `text` is included because the retrieval table
+    has to show what was retrieved; an id alone is not inspectable.
+    """
+    return {
+        "document_id": result.chunk.document_id,
+        "chunk_id": result.chunk.chunk_id,
+        "score": round(result.score, 4),
+        "rank": result.rank,
+        "text": result.chunk.text,
+        "metadata": result.chunk.metadata,
+        "scores": {
+            "dense": _stage_payload(result.trace.dense),
+            "sparse": _stage_payload(result.trace.sparse),
+            "fused": _stage_payload(result.trace.fused),
+            "reranker": _stage_payload(result.trace.reranker),
+        },
+    }
+
+
 class RAGService:
     """Orchestrates retrieval + prompt building + LLM generation.
 
@@ -71,13 +102,18 @@ class RAGService:
     # Core operation
     # ------------------------------------------------------------------
 
-    def answer(self, question: str, top_k: Optional[int] = None) -> RAGResponse:
+    def answer(
+        self,
+        question: str,
+        top_k: Optional[int] = None,
+        retriever: RetrieverMode = "hybrid",
+    ) -> RAGResponse:
         request_id = str(uuid.uuid4())
         k = top_k if top_k is not None else self._default_top_k
 
         try:
             t0 = time.perf_counter()
-            results = self._retriever.retrieve(question, top_k=k)
+            results = self._retriever.retrieve(question, top_k=k, mode=retriever)
             retrieval_ms = (time.perf_counter() - t0) * 1000
 
             prompt = self._builder.build(question, results)
@@ -94,6 +130,7 @@ class RAGService:
             json.dumps({
                 "event": "query",
                 "request_id": request_id,
+                "retriever": retriever,
                 "question_len": len(question),
                 "chunks_retrieved": len(results),
                 "retrieval_ms": round(retrieval_ms, 1),
@@ -109,6 +146,7 @@ class RAGService:
             retrieval_latency_ms=retrieval_ms,
             generation_latency_ms=response.latency_ms,
             request_id=request_id,
+            retriever=retriever,
         )
 
     # ------------------------------------------------------------------
@@ -116,7 +154,10 @@ class RAGService:
     # ------------------------------------------------------------------
 
     def stream(
-        self, question: str, top_k: Optional[int] = None
+        self,
+        question: str,
+        top_k: Optional[int] = None,
+        retriever: RetrieverMode = "hybrid",
     ) -> Generator[dict, None, None]:
         """Yield SSE-ready event dicts: sources → tokens → done.
 
@@ -136,18 +177,10 @@ class RAGService:
 
         try:
             t0 = time.perf_counter()
-            results = self._retriever.retrieve(question, top_k=k)
+            results = self._retriever.retrieve(question, top_k=k, mode=retriever)
             retrieval_ms = (time.perf_counter() - t0) * 1000
 
-            sources = [
-                {
-                    "document_id": r.chunk.document_id,
-                    "chunk_id": r.chunk.chunk_id,
-                    "score": round(r.score, 4),
-                }
-                for r in results
-            ]
-            yield {"type": "sources", "data": sources}
+            yield {"type": "sources", "data": [source_payload(r) for r in results]}
 
             prompt = self._builder.build(question, results)
 
@@ -174,6 +207,7 @@ class RAGService:
             json.dumps({
                 "event": "stream",
                 "request_id": request_id,
+                "retriever": retriever,
                 "question_len": len(question),
                 "chunks_retrieved": len(results),
                 "retrieval_ms": round(retrieval_ms, 1),
@@ -190,6 +224,7 @@ class RAGService:
             "type": "done",
             "data": {
                 "request_id": request_id,
+                "retriever": retriever,
                 "retrieval_latency_ms": round(retrieval_ms, 1),
                 "generation_latency_ms": round(generation_ms, 1),
                 "total_latency_ms": round(retrieval_ms + generation_ms, 1),
