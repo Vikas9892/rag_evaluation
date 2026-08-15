@@ -25,6 +25,7 @@ import {
 } from "@/lib/query-params";
 import { NativeSelect } from "@/components/ui/native-select";
 import { RetrievalTable } from "@/components/query/retrieval-table";
+import { PipelineDiagram } from "@/components/query/pipeline-diagram";
 
 /**
  * The query surface.

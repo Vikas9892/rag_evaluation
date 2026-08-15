@@ -28,6 +28,37 @@ const DONE = {
   generation_latency_ms: 1183,
   total_latency_ms: 1187.2,
   first_token_latency_ms: 210.5,
+  pipeline: [
+    { name: "embedding" as const, status: "ok" as const, latency_ms: 381.33 },
+    {
+      name: "dense" as const,
+      status: "ok" as const,
+      latency_ms: 2.61,
+      candidates_in: 19,
+      candidates_out: 12,
+    },
+    {
+      name: "sparse" as const,
+      status: "ok" as const,
+      latency_ms: 0.38,
+      candidates_in: 19,
+      candidates_out: 2,
+    },
+    {
+      name: "fusion" as const,
+      status: "ok" as const,
+      latency_ms: 0.05,
+      candidates_in: 12,
+      candidates_out: 3,
+    },
+    { name: "reranker" as const, status: "skipped" as const, latency_ms: 0 },
+    {
+      name: "generation" as const,
+      status: "ok" as const,
+      latency_ms: 603.07,
+      candidates_in: 3,
+    },
+  ],
 };
 
 const ANSWER = "ACID is atomicity, consistency, isolation, durability.";

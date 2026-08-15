@@ -15,6 +15,9 @@ export type MetricsResponse = Schemas["MetricsResponse"];
 export type QueryRequest = Schemas["QueryRequest"];
 export type QueryResponse = Schemas["QueryResponse"];
 export type SourceInfo = Schemas["SourceInfo"];
+export type PipelineStage = Schemas["PipelineStageInfo"];
+export type StageName = PipelineStage["name"];
+export type StageStatus = PipelineStage["status"];
 
 /** One event from the /stream SSE endpoint. */
 export type StreamEvent =
@@ -36,6 +39,8 @@ export interface StreamDone {
   total_latency_ms: number;
   /** null when the model produced no tokens — not the same as arriving in 0 ms. */
   first_token_latency_ms: number | null;
+  /** Every stage in data-flow order, including the ones that did not run. */
+  pipeline: PipelineStage[];
 }
 
 /**

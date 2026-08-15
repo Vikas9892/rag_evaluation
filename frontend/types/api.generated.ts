@@ -144,6 +144,47 @@ export interface components {
             errors: number;
         };
         /**
+         * PipelineStageInfo
+         * @description What one stage of the pipeline did.
+         *
+         *     `skipped` means the stage did not run — a sparse-only query embeds nothing,
+         *     and the cross-encoder reranker is not wired into the live path. The product
+         *     spec requires these to render differently from stages that ran, and the
+         *     diagram must never animate one that did not.
+         *
+         *     `error` is part of the contract but is not emitted today: a stage that
+         *     raises aborts the request, so no trace reaches the client.
+         */
+        PipelineStageInfo: {
+            /**
+             * Name
+             * @description Stage identity, in data-flow order
+             * @enum {string}
+             */
+            name: "embedding" | "dense" | "sparse" | "fusion" | "reranker" | "generation";
+            /**
+             * Status
+             * @description Whether the stage ran
+             * @enum {string}
+             */
+            status: "ok" | "skipped" | "error";
+            /**
+             * Latency Ms
+             * @description Measured duration; 0 for a skipped stage, which is an absence rather than a fast measurement
+             */
+            latency_ms: number;
+            /**
+             * Candidates In
+             * @description Candidates entering the stage; null where inapplicable
+             */
+            candidates_in?: number | null;
+            /**
+             * Candidates Out
+             * @description Candidates leaving the stage; null where inapplicable
+             */
+            candidates_out?: number | null;
+        };
+        /**
          * QueryRequest
          * @example {
          *       "question": "What are the main components of a transformer architecture?",
@@ -225,6 +266,11 @@ export interface components {
              * @enum {string}
              */
             retriever: "dense" | "sparse" | "hybrid";
+            /**
+             * Pipeline
+             * @description Every stage in data-flow order, including those that did not run
+             */
+            pipeline?: components["schemas"]["PipelineStageInfo"][];
         };
         /** SourceInfo */
         SourceInfo: {
