@@ -162,6 +162,13 @@ export interface components {
              * @default 5
              */
             top_k: number;
+            /**
+             * Retriever
+             * @description Retrieval strategy. 'dense' is embedding similarity alone, 'sparse' is BM25 keyword matching alone, 'hybrid' fuses both with Reciprocal Rank Fusion. Comparing them is the point of the platform, so it is chosen per request rather than per deployment.
+             * @default hybrid
+             * @enum {string}
+             */
+            retriever: "dense" | "sparse" | "hybrid";
         };
         /**
          * QueryResponse
@@ -211,6 +218,13 @@ export interface components {
              * @description UUID for request tracing in logs
              */
             request_id: string;
+            /**
+             * Retriever
+             * @description Which strategy ran. Needed to read `sources[].scores`: it tells a null stage that did not run apart from one that missed a chunk.
+             * @default hybrid
+             * @enum {string}
+             */
+            retriever: "dense" | "sparse" | "hybrid";
         };
         /** SourceInfo */
         SourceInfo: {
@@ -226,9 +240,67 @@ export interface components {
             chunk_id: string;
             /**
              * Score
-             * @description Cosine-similarity score in [0, 1]
+             * @description Final score, in the units of the last stage to rank it
              */
             score: number;
+            /**
+             * Rank
+             * @description 1-indexed final position
+             * @default 0
+             */
+            rank: number;
+            /**
+             * Text
+             * @description The retrieved chunk itself
+             * @default
+             */
+            text: string;
+            /**
+             * Metadata
+             * @description Chunk metadata, e.g. heading
+             */
+            metadata?: {
+                [key: string]: unknown;
+            };
+            /** @description How each retrieval stage scored this chunk */
+            scores?: components["schemas"]["SourceScores"];
+        };
+        /**
+         * SourceScores
+         * @description Per-stage attribution for one chunk.
+         *
+         *     A stage is null when it did not rank this chunk — either it did not run, or
+         *     it ran and the chunk fell outside its candidate window. Which applies is
+         *     resolved by `QueryResponse.retriever`, which reports what actually executed.
+         *
+         *     Null never means "scored zero". BM25 scores zero for a chunk with no term
+         *     overlap, and that is a measurement; absence is not.
+         */
+        SourceScores: {
+            /** @description Embedding similarity */
+            dense?: components["schemas"]["StageScore"] | null;
+            /** @description BM25 keyword match */
+            sparse?: components["schemas"]["StageScore"] | null;
+            /** @description Reciprocal Rank Fusion */
+            fused?: components["schemas"]["StageScore"] | null;
+            /** @description Cross-encoder rerank */
+            reranker?: components["schemas"]["StageScore"] | null;
+        };
+        /**
+         * StageScore
+         * @description One retrieval stage's opinion of one chunk.
+         */
+        StageScore: {
+            /**
+             * Score
+             * @description The stage's own units — cosine similarity for dense, BM25 for sparse, an RRF sum for fusion. Not comparable across stages.
+             */
+            score: number;
+            /**
+             * Rank
+             * @description 1-indexed position within that stage's results
+             */
+            rank: number;
         };
         /** ValidationError */
         ValidationError: {

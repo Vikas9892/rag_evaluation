@@ -39,12 +39,12 @@ export interface StreamDone {
 /**
  * Source metadata as it appears in the stream's first event.
  *
- * Hand-written because /stream returns text/event-stream: FastAPI cannot
- * describe the event payloads in OpenAPI, so there is nothing to generate from.
- * This type is a contract with api/routers/stream.py and must be updated with it.
+ * The stream and POST /query build sources with the same serialiser
+ * (`source_payload` in services/rag_service.py), so this is the generated
+ * `SourceInfo` rather than a parallel hand-written shape that could drift from
+ * it. `tests/test_api_contract.py` fails if the two ever stop matching.
  */
-export interface StreamSource {
-  document_id: string;
-  chunk_id: string;
-  score: number;
-}
+export type StreamSource = SourceInfo;
+
+/** Which retrieval strategy to run, or which one did. */
+export type RetrieverMode = NonNullable<QueryRequest["retriever"]>;

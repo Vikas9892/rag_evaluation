@@ -34,7 +34,23 @@ const ANSWER = "ACID is atomicity, consistency, isolation, durability.";
 const FULL_STREAM: StreamEvent[] = [
   {
     type: "sources",
-    data: [{ document_id: "dbms.md", chunk_id: "dbms.md_0", score: 0.9 }],
+    data: [
+      {
+        document_id: "dbms.md",
+        chunk_id: "dbms.md_0",
+        score: 0.0323,
+        rank: 1,
+        text: "ACID guarantees atomicity, consistency, isolation and durability.",
+        metadata: { heading: "ACID" },
+        scores: {
+          dense: { score: 0.56, rank: 2 },
+          // Sparse did not surface this chunk. Not a zero score — an absence.
+          sparse: null,
+          fused: { score: 0.0323, rank: 1 },
+          reranker: null,
+        },
+      },
+    ],
   },
   { type: "token", data: "ACID is atomicity, " },
   { type: "token", data: "consistency, isolation, durability." },
