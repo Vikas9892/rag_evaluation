@@ -203,6 +203,27 @@ leaves text behind. A connection that ends without `done` is a failure, not a sh
 | Stream ended without `done` | the partial answer, with a `parse` failure beneath it |
 | Cancelled (navigated away) | nothing — see the error taxonomy |
 
+## Reading the retrieval trace
+
+Each entry in `sources` carries `scores` with `dense`, `sparse`, `fused` and `reranker`.
+A stage is `null` when it did not rank that chunk. Whether it ran at all is a separate
+fact, answered by the response's `retriever` field:
+
+| `retriever` | `scores.sparse === null` means |
+|---|---|
+| `"hybrid"` | sparse ran and did not surface this chunk |
+| `"dense"` | sparse did not run — render the stage greyed out, not empty |
+
+`null` is never "scored zero". BM25 genuinely scores zero for a chunk with no term
+overlap, and the UI must not present a measurement and an absence the same way.
+
+Scores are in each stage's own units — cosine for dense, BM25 for sparse, an RRF sum for
+fusion — and are not comparable across stages. The **rank** is the comparable part, and
+what makes disagreement legible.
+
+`StreamSource` is an alias of the generated `SourceInfo`: one serialiser feeds both
+`/query` and the stream, and a Python contract test fails if they drift.
+
 ## Rendering a failure
 
 | Situation | Component | Why |

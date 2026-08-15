@@ -90,7 +90,7 @@ hook. No page consumes these yet; the first real consumer is M8.
 
 | # | Milestone | Status | Notes |
 |---|---|---|---|
-| 8 | Question input — autocomplete, history, clear | ✅ | `54b39df` — `/query?q=…&top_k=10`; **no `retriever` param, see below** |
+| 8 | Question input — autocomplete, history, clear | ✅ | `54b39df` — `/query?q=…&top_k=10`; the retriever selector is now unblocked but not built |
 | 9 | Streaming answer via `/stream` | ✅ | `7a929ea`, `e3484b9` |
 | 10 | Answer UI — answer, confidence, sources, latency | 🟡 | answer, latency and time-to-first-token render; confidence and per-source attribution do not |
 
@@ -106,29 +106,38 @@ A measurement worth keeping: on a short answer the first token arrived at
 streaming bought almost nothing in perceived latency here. It will matter on
 long answers; on short ones it is close to theatre.
 
-**A third blocker, found while building M8.** The settings placeholder promised
-`/query?q=…&top_k=10&retriever=hybrid`, but **`retriever` is not a request
-parameter**. `HybridRetriever` is constructed once at startup in
-`api/dependencies.py` and `RAGService.answer()` takes only `(question, top_k)`,
-so choosing a retriever per request needs the same kind of contract change M11
-is waiting on. M8 therefore ships `q` and `top_k` only, and the settings page
-still describes a control that cannot exist yet.
+**The third blocker is cleared too.** The settings placeholder promised
+`/query?q=…&top_k=10&retriever=hybrid`, and `retriever` was not a request
+parameter. It is now (`88b4672`), so the selector is buildable — it just is not
+built. The settings page still describes a control that does not exist, and the
+reranker half of it stays blocked on open decision 2.
 
 ## Phase 5 — Retrieval visualisation
 
 | # | Milestone | Status | Notes |
 |---|---|---|---|
-| 11 | Retrieved chunks — rank, similarity, source, chunk, metadata | ⛔ | **Backend contract blocks this** |
-| 12 | Pipeline visualisation (query → embedding → dense → sparse → fusion → reranker → LLM) | ⬜ | |
+| 11 | Retrieved chunks — rank, similarity, source, chunk, metadata | 🟡 | `a1881b9`, `88b4672` — **unblocked**; the API serves the trace, no UI consumes it yet |
+| 12 | Pipeline visualisation (query → embedding → dense → sparse → fusion → reranker → LLM) | ⬜ | needs `PipelineStage` (spec §6.2), which is not built |
 
-**The M11 blocker.** `HybridRetriever` fuses dense and sparse into a single
-score and discards the component ranks, so a Dense / BM25 / Final breakdown
-cannot be rendered from what the API currently returns. `product_spec.md` §6
-specifies the fix: `RetrievedChunk.scores` carrying `dense | sparse | fused |
-reranker`, each nullable, where `null` means *this stage did not run* — distinct
-from a zero score, and rendered differently. Same for `PipelineStage.status:
-'skipped'`, which is what lets the M12 diagram be honest about the unwired
-cross-encoder.
+**The M11 blocker is cleared.** `HybridRetriever` no longer discards component
+ranks: every result carries `scores` with `dense | sparse | fused | reranker`,
+and `retriever` is now a per-request choice, so the settings page can keep the
+promise it has been making since M4.
+
+One refinement to the spec's wording. §6.1 glosses `null` as "stage did not
+run", but once a stage *can* run and still miss a chunk, that is two different
+facts sharing one representation. Per chunk, `null` means "this stage did not
+rank this chunk"; whether the stage ran at all is answered by the response's
+`retriever` field. The UI needs both to render the distinction the spec asks
+for.
+
+A live query shows why the table is worth building: dense's rank-1 chunk was
+never surfaced by sparse (fused rank 3), while sparse's rank-1 chunk was dense's
+rank 9 (fused rank 2). The retrievers disagree substantially.
+
+**Still outstanding for M11:** the UI itself, and `PipelineStage` for M12. The
+reranker stays absent from every trace because it is not wired into the live
+path — open decision 2 below.
 
 ## Phase 6 — Evaluation dashboard
 
@@ -204,14 +213,17 @@ These were raised before Milestone 2 and are still unanswered:
 
 ## Suggested next step
 
-**The backend score contract.** It is now the single change that unblocks the
-most: per-retriever scores clear M11, a per-request retriever lets the settings
-page keep its promise, and both are the same edit to `RAGService` and
-`HybridRetriever`. M10's remaining half — per-source attribution — wants it too,
-since the stream already delivers sources and only the score breakdown is
-missing.
+**Milestone 11 — the retrieval table**, now that the data exists. It is the
+feature that makes this platform distinctive, and every field it needs is on the
+wire: per-stage scores and ranks, the chunk text, and the retriever that ran.
+M10's remaining half (per-source attribution) falls out of the same work, since
+both render the same `sources` array.
 
-M15 stays blocked on the corpus regardless.
+Then **Milestone 12** needs one more backend piece — `PipelineStage` from spec
+§6.2 — before the diagram can be honest about which stages executed.
+
+M15 stays blocked on the corpus, and the BM25 IDF finding in
+`tests/test_retrieval_trace.py` is further evidence for growing it.
 
 ---
 
