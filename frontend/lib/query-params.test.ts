@@ -4,6 +4,7 @@ import {
   buildQueryString,
   parseQueryParams,
   RETRIEVERS,
+  CORPUS_DEFAULT,
   RETRIEVER_DEFAULT,
   TOP_K_DEFAULT,
   TOP_K_MAX,
@@ -19,6 +20,7 @@ describe("parseQueryParams", () => {
       topK: 8,
       retriever: RETRIEVER_DEFAULT,
       reranker: false,
+      corpus: CORPUS_DEFAULT,
     });
   });
 
@@ -69,6 +71,7 @@ describe("buildQueryString", () => {
         topK: TOP_K_DEFAULT,
         retriever: RETRIEVER_DEFAULT,
         reranker: false,
+        corpus: CORPUS_DEFAULT,
       }),
     ).toBe("?q=hello");
   });
@@ -80,6 +83,7 @@ describe("buildQueryString", () => {
         topK: 10,
         retriever: RETRIEVER_DEFAULT,
         reranker: false,
+        corpus: CORPUS_DEFAULT,
       }),
     ).toBe("?q=hello&top_k=10");
   });
@@ -91,6 +95,7 @@ describe("buildQueryString", () => {
         topK: TOP_K_DEFAULT,
         retriever: RETRIEVER_DEFAULT,
         reranker: false,
+        corpus: CORPUS_DEFAULT,
       }),
     ).toBe("");
   });
@@ -101,6 +106,7 @@ describe("buildQueryString", () => {
       topK: TOP_K_DEFAULT,
       retriever: RETRIEVER_DEFAULT,
       reranker: false,
+      corpus: CORPUS_DEFAULT,
     });
     expect(encoded).not.toMatch(/[ #]/);
     expect(parse(encoded).q).toBe("a&b=c?d #e");
@@ -112,6 +118,51 @@ describe("buildQueryString", () => {
       topK: 12,
       retriever: "sparse" as const,
       reranker: false,
+      corpus: CORPUS_DEFAULT,
+    };
+    expect(parse(buildQueryString(original))).toEqual(original);
+  });
+});
+
+describe("corpus", () => {
+  it("defaults to the benchmark corpus when the URL names none", () => {
+    expect(parse("?q=hello").corpus).toBe(CORPUS_DEFAULT);
+  });
+
+  it("reads a corpus the API would accept", () => {
+    expect(parse("?q=hello&corpus=k8s-notes").corpus).toBe("k8s-notes");
+  });
+
+  it.each(["../../etc", "Workspace", "-leading", "has space", "a".repeat(65)])(
+    "falls back rather than passing on %s",
+    (corpus) => {
+      // Sanitising would be worse than ignoring: a repaired id names some other
+      // corpus, and the answer would come from documents nobody asked about.
+      expect(parse(`?q=hello&corpus=${encodeURIComponent(corpus)}`).corpus).toBe(
+        CORPUS_DEFAULT,
+      );
+    },
+  );
+
+  it("omits the corpus at its default so the common link stays short", () => {
+    expect(
+      buildQueryString({
+        q: "hello",
+        topK: TOP_K_DEFAULT,
+        retriever: RETRIEVER_DEFAULT,
+        reranker: false,
+        corpus: CORPUS_DEFAULT,
+      }),
+    ).toBe("?q=hello");
+  });
+
+  it("round-trips a non-default corpus", () => {
+    const original = {
+      q: "hello",
+      topK: TOP_K_DEFAULT,
+      retriever: RETRIEVER_DEFAULT,
+      reranker: false,
+      corpus: "workspace",
     };
     expect(parse(buildQueryString(original))).toEqual(original);
   });
@@ -143,6 +194,7 @@ describe("retriever", () => {
         topK: TOP_K_DEFAULT,
         retriever: RETRIEVER_DEFAULT,
         reranker: false,
+        corpus: CORPUS_DEFAULT,
       }),
     ).toBe("?q=hello");
   });
@@ -155,6 +207,7 @@ describe("retriever", () => {
         topK: TOP_K_DEFAULT,
         retriever: "hybrid",
         reranker: false,
+        corpus: CORPUS_DEFAULT,
       }),
     ).toBe("?q=hello&retriever=hybrid");
   });
@@ -165,6 +218,7 @@ describe("retriever", () => {
       topK: 12,
       retriever: "sparse" as const,
       reranker: false,
+      corpus: CORPUS_DEFAULT,
     };
     expect(parse(buildQueryString(original))).toEqual(original);
   });

@@ -250,29 +250,40 @@ export async function uploadDocument(
 
 export function postQuery(
   question: string,
-  topK?: number,
-  signal?: AbortSignal,
-  retriever?: RetrieverMode,
+  options: QueryOptions = {},
 ): Promise<QueryResponse> {
   return request<QueryResponse>("/query", {
     method: "POST",
-    body: JSON.stringify(requestBody(question, topK, retriever)),
-    signal,
+    body: JSON.stringify(requestBody(question, options)),
+    signal: options.signal,
   });
 }
 
 /** Omits defaults so the request carries only what the caller chose. */
-function requestBody(
-  question: string,
-  topK?: number,
-  retriever?: RetrieverMode,
-  reranker?: boolean,
-) {
+/**
+ * What to ask, and of which corpus.
+ *
+ * An options object rather than positional arguments: `question, topK, signal,
+ * retriever, reranker, corpus` is six parameters of which four are optional and
+ * two are booleans-or-strings, and transposing any pair of them type-checks.
+ */
+export interface QueryOptions {
+  topK?: number;
+  retriever?: RetrieverMode;
+  reranker?: boolean;
+  /** Omitted means the API's default corpus, which is the benchmark set. */
+  corpusId?: string;
+  signal?: AbortSignal;
+}
+
+function requestBody(question: string, options: QueryOptions) {
+  const { topK, retriever, reranker, corpusId } = options;
   return {
     question,
     ...(topK === undefined ? {} : { top_k: topK }),
     ...(retriever === undefined ? {} : { retriever }),
     ...(reranker ? { reranker: true } : {}),
+    ...(corpusId === undefined ? {} : { corpus_id: corpusId }),
   };
 }
 
@@ -285,17 +296,15 @@ function requestBody(
  */
 export async function* streamQuery(
   question: string,
-  topK?: number,
-  signal?: AbortSignal,
-  retriever?: RetrieverMode,
-  reranker?: boolean,
+  options: QueryOptions = {},
 ): AsyncGenerator<StreamEvent> {
+  const { signal } = options;
   let response: Response;
   try {
     response = await fetch(`${apiBaseUrl()}/stream`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(requestBody(question, topK, retriever, reranker)),
+      body: JSON.stringify(requestBody(question, options)),
       signal,
     });
   } catch (cause) {

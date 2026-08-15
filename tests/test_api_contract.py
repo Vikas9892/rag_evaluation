@@ -15,6 +15,7 @@ import pytest
 from api.schemas import QueryRequest, SourceInfo
 from chunking.chunk import Chunk
 from config.settings import BASE_DIR
+from corpora.layout import DEFAULT_CORPUS_ID, _VALID_CORPUS_ID
 from retrieval.ranking import RetrievalResult, RetrievalTrace, StageScore
 from services.rag_service import source_payload
 
@@ -138,3 +139,50 @@ class TestRetrieverModes:
             r'RETRIEVER_DEFAULT: RetrieverMode = "([^"]+)"', source
         ).group(1)
         assert frontend_default == QueryRequest.model_fields["retriever"].default
+
+
+class TestCorpusId:
+    """The corpus id pattern and default are duplicated in the browser.
+
+    The frontend refuses an id the API would reject so a hand-edited URL is
+    ignored rather than turned into a 422 banner, and it falls back to the same
+    default the API uses so a link with no corpus means one thing, not two.
+    """
+
+    @staticmethod
+    def _frontend_pattern() -> str:
+        source = QUERY_PARAMS_TS.read_text(encoding="utf-8")
+        match = re.search(r"const VALID_CORPUS_ID = /(.+?)/;", source)
+        assert match, "VALID_CORPUS_ID is not declared in query-params.ts"
+        return match.group(1)
+
+    @staticmethod
+    def _frontend_default() -> str:
+        source = QUERY_PARAMS_TS.read_text(encoding="utf-8")
+        match = re.search(r'export const CORPUS_DEFAULT = "([^"]+)";', source)
+        assert match, "CORPUS_DEFAULT is not exported from query-params.ts"
+        return match.group(1)
+
+    def test_pattern_matches_the_one_the_api_enforces(self):
+        assert self._frontend_pattern() == _VALID_CORPUS_ID.pattern
+
+    def test_default_matches_the_api(self):
+        assert self._frontend_default() == DEFAULT_CORPUS_ID
+
+    @pytest.mark.parametrize(
+        "corpus_id",
+        ["evaluation", "workspace", "k8s-notes", "a", "a_b-9"],
+    )
+    def test_both_sides_accept_the_same_valid_ids(self, corpus_id):
+        assert re.match(self._frontend_pattern(), corpus_id)
+        assert _VALID_CORPUS_ID.match(corpus_id)
+
+    @pytest.mark.parametrize(
+        "corpus_id",
+        ["../../etc", "Evaluation", "-leading", "_leading", "has space", "", "a" * 65],
+    )
+    def test_both_sides_refuse_the_same_bad_ids(self, corpus_id):
+        # Path traversal is the one that matters: the id becomes a directory
+        # name, so an id that escapes the index root is the bug this prevents.
+        assert not re.match(self._frontend_pattern(), corpus_id)
+        assert not _VALID_CORPUS_ID.match(corpus_id)

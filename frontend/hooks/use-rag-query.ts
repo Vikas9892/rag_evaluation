@@ -28,11 +28,14 @@ export function ragQueryKey(
   topK: number,
   retriever: RetrieverMode,
   reranker: boolean,
+  corpus: string,
 ) {
   // The retriever is part of the identity of an answer, not a detail of how it
   // was fetched: the same question under dense and under hybrid are two
   // different results, and sharing a cache entry would show one as the other.
-  return ["rag-query", question, topK, retriever, reranker] as const;
+  // The corpus matters for the same reason, and more sharply — the same
+  // question against two document sets has two different correct answers.
+  return ["rag-query", question, topK, retriever, reranker, corpus] as const;
 }
 
 /**
@@ -52,9 +55,10 @@ export function useRagQuery(
   topK: number,
   retriever: RetrieverMode,
   reranker: boolean,
+  corpus: string,
 ) {
   return useQuery<RagAnswer>({
-    queryKey: ragQueryKey(question, topK, retriever, reranker),
+    queryKey: ragQueryKey(question, topK, retriever, reranker, corpus),
     queryFn: async ({ signal, client, queryKey }) => {
       let current: RagAnswer = EMPTY;
 
@@ -67,13 +71,13 @@ export function useRagQuery(
 
       publish({});
 
-      for await (const event of streamQuery(
-        question,
+      for await (const event of streamQuery(question, {
         topK,
-        signal,
         retriever,
         reranker,
-      )) {
+        corpusId: corpus,
+        signal,
+      })) {
         switch (event.type) {
           case "sources":
             publish({ sources: event.data });

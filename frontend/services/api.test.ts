@@ -101,7 +101,7 @@ describe("postQuery", () => {
         return HttpResponse.json({ answer: "ok" });
       }),
     );
-    await postQuery("q", 10);
+    await postQuery("q", { topK: 10 });
     expect(body).toEqual({ question: "q", top_k: 10 });
   });
 });

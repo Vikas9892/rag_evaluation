@@ -5,7 +5,7 @@ import { useState } from "react";
 import { EmptyState } from "@/components/empty-state";
 import { ErrorState } from "@/components/error-state";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Field, FieldLabel } from "@/components/ui/field";
+import { InlineField } from "@/components/ui/inline-field";
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
 import { DocumentRow } from "@/components/workspace/document-row";
@@ -74,13 +74,7 @@ export function WorkspacePanel() {
 
             {showAdvanced ? (
               <div className="mt-3 space-y-2">
-                <Field className="w-auto flex-row items-center gap-2">
-                  <FieldLabel
-                    htmlFor="chunk-size"
-                    className="text-muted-foreground text-sm whitespace-nowrap"
-                  >
-                    Chunk size
-                  </FieldLabel>
+                <InlineField htmlFor="chunk-size" label="Chunk size">
                   <Input
                     id="chunk-size"
                     type="number"
@@ -91,7 +85,7 @@ export function WorkspacePanel() {
                     onChange={(event) => setChunkSize(event.target.value)}
                     className="w-24"
                   />
-                </Field>
+                </InlineField>
                 {/*
                   Stated plainly because the alternative is a user changing this
                   and wondering why their existing documents did not change.

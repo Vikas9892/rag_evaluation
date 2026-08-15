@@ -1,6 +1,6 @@
 import { render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
 import { RetrievalTable } from "./retrieval-table";
 import type { SourceInfo } from "@/types/api";
@@ -197,5 +197,67 @@ describe("RetrievalTable", () => {
       render(<RetrievalTable retriever="hybrid" sources={[source()]} />);
       expect(screen.getByText(/reranker did not run/i)).toBeInTheDocument();
     });
+  });
+
+  describe("the reranker stage", () => {
+    const reranked = (rank: number, score: number) =>
+      source({
+        chunk_id: `dbms.md_chunk_000${rank}`,
+        rank,
+        scores: {
+          dense: { score: 0.56, rank: 2 },
+          sparse: { score: 1.6, rank: 2 },
+          fused: { score: 0.032, rank: 1 },
+          reranker: { score, rank },
+        },
+      });
+
+    it("shows a Reranked column when the cross-encoder ran", () => {
+      // Without it the reranker is invisible in the very trace it reorders,
+      // and the ranking looks like it came from the earlier stages.
+      render(<RetrievalTable retriever="hybrid" sources={[reranked(1, 4.06)]} />);
+
+      expect(screen.getByRole("columnheader", { name: "Reranked" })).toBeInTheDocument();
+    });
+
+    it("hides the column when it did not run", () => {
+      render(<RetrievalTable retriever="hybrid" sources={[source()]} />);
+
+      expect(screen.queryByRole("columnheader", { name: "Reranked" })).toBeNull();
+    });
+
+    it("reads the results, not the requested setting", () => {
+      // Reranking can be asked for and still not happen. A column of dashes
+      // would report that as "the cross-encoder scored nothing".
+      render(<RetrievalTable retriever="dense" sources={[source()]} />);
+
+      expect(screen.queryByRole("columnheader", { name: "Reranked" })).toBeNull();
+      expect(screen.getByText(/reranker did not run/i)).toBeInTheDocument();
+    });
+
+    it("stops claiming the reranker did not run once it has", () => {
+      render(<RetrievalTable retriever="hybrid" sources={[reranked(1, 4.06)]} />);
+
+      expect(screen.queryByText(/reranker did not run/i)).toBeNull();
+      expect(screen.getByText(/cross-encoder's order/i)).toBeInTheDocument();
+    });
+
+    it("shows a negative cross-encoder score as it is", () => {
+      // These are logits, not probabilities, and are routinely negative.
+      render(<RetrievalTable retriever="dense" sources={[reranked(3, -8.94)]} />);
+
+      expect(screen.getByText("-8.94")).toBeInTheDocument();
+    });
+  });
+
+  it("offers to copy the whole chunk, not the clamped preview", async () => {
+    const write = vi.fn().mockResolvedValue(undefined);
+    Object.assign(navigator, { clipboard: { writeText: write } });
+    const long = "x".repeat(400);
+    render(<RetrievalTable retriever="dense" sources={[source({ text: long })]} />);
+
+    await userEvent.click(screen.getByRole("button", { name: /^copy$/i }));
+
+    expect(write).toHaveBeenCalledWith(long);
   });
 });

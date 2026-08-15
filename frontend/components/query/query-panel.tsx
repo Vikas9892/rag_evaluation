@@ -9,7 +9,7 @@ import { ErrorState } from "@/components/error-state";
 import { QuestionInput } from "@/components/query/question-input";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Field, FieldLabel } from "@/components/ui/field";
+import { InlineField } from "@/components/ui/inline-field";
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useQuestionHistory } from "@/hooks/use-question-history";
@@ -23,6 +23,8 @@ import {
   TOP_K_MIN,
 } from "@/lib/query-params";
 import { NativeSelect } from "@/components/ui/native-select";
+import { CopyButton } from "@/components/copy-button";
+import { CorpusSelect } from "@/components/query/corpus-select";
 import { RetrievalTable } from "@/components/query/retrieval-table";
 import { PipelineDiagram } from "@/components/query/pipeline-diagram";
 
@@ -37,29 +39,40 @@ export function QueryPanel() {
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
-  const { q, topK, retriever, reranker } = parseQueryParams(
+  const { q, topK, retriever, reranker, corpus } = parseQueryParams(
     new URLSearchParams(searchParams.toString()),
   );
 
   const { history, remember, forget } = useQuestionHistory();
-  const { data, error, isFetching, refetch } = useRagQuery(q, topK, retriever, reranker);
+  const { data, error, isFetching, refetch } = useRagQuery(
+    q,
+    topK,
+    retriever,
+    reranker,
+    corpus,
+  );
 
   function ask(question: string) {
     remember(question);
     // push, not replace: each question asked is a place the user can come back
     // to with the browser's Back button.
     router.push(
-      `${pathname}${buildQueryString({ q: question, topK, retriever, reranker })}`,
+      `${pathname}${buildQueryString({ q: question, topK, retriever, reranker, corpus })}`,
     );
   }
 
   function changeSetting(
-    next: Partial<{ topK: number; retriever: RetrieverMode; reranker: boolean }>,
+    next: Partial<{
+      topK: number;
+      retriever: RetrieverMode;
+      reranker: boolean;
+      corpus: string;
+    }>,
   ) {
     // replace, not push: adjusting a setting is not a destination, and pushing
     // would make Back walk through every intermediate value.
     router.replace(
-      `${pathname}${buildQueryString({ q, topK, retriever, reranker, ...next })}`,
+      `${pathname}${buildQueryString({ q, topK, retriever, reranker, corpus, ...next })}`,
     );
   }
 
@@ -76,23 +89,26 @@ export function QueryPanel() {
           onSubmit={ask}
         />
 
-        <div className="flex flex-wrap items-center gap-4">
+        <div className="flex flex-wrap items-center gap-x-6 gap-y-3">
+          {/*
+            First, because it changes what every other control operates on:
+            the retriever and top-K are settings, but the corpus is the subject.
+          */}
+          <CorpusSelect
+            value={corpus}
+            onChange={(next) => changeSetting({ corpus: next })}
+          />
+
           <TopKField value={topK} onCommit={(next) => changeSetting({ topK: next })} />
 
-          <Field className="w-auto flex-row items-center gap-2">
-            <FieldLabel
-              htmlFor="retriever"
-              className="text-muted-foreground text-sm whitespace-nowrap"
-            >
-              Retriever
-            </FieldLabel>
+          <InlineField htmlFor="retriever" label="Retriever">
             <NativeSelect
               id="retriever"
               value={retriever}
               onChange={(event) =>
                 changeSetting({ retriever: event.target.value as RetrieverMode })
               }
-              className="w-32 shrink-0"
+              className="w-32"
             >
               {RETRIEVERS.map((option) => (
                 <option key={option} value={option}>
@@ -100,9 +116,9 @@ export function QueryPanel() {
                 </option>
               ))}
             </NativeSelect>
-          </Field>
+          </InlineField>
 
-          <label className="text-muted-foreground flex items-center gap-2 text-sm">
+          <label className="text-muted-foreground flex shrink-0 items-center gap-2 text-sm">
             <input
               type="checkbox"
               checked={reranker}
@@ -176,13 +192,7 @@ function TopKField({
   }
 
   return (
-    <Field className="w-auto flex-row items-center gap-2">
-      <FieldLabel
-        htmlFor="top-k"
-        className="text-muted-foreground text-sm whitespace-nowrap"
-      >
-        Chunks retrieved
-      </FieldLabel>
+    <InlineField htmlFor="top-k" label="Chunks retrieved">
       <Input
         id="top-k"
         type="number"
@@ -199,7 +209,7 @@ function TopKField({
         }}
         className="w-20"
       />
-    </Field>
+    </InlineField>
   );
 }
 
@@ -258,8 +268,13 @@ function Result({
   return (
     <>
       <Card>
-        <CardHeader>
+        <CardHeader className="flex-row items-center justify-between gap-2">
           <CardTitle>Answer</CardTitle>
+          {/*
+            Offered only once the answer is whole. Copying mid-stream hands over
+            half a sentence that looks like the whole one.
+          */}
+          {data?.complete ? <CopyButton value={partial} label="Copy answer" /> : null}
         </CardHeader>
         <CardContent className="space-y-3">
           {/*

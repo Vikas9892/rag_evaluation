@@ -3,6 +3,7 @@
 import { useState } from "react";
 
 import { Badge } from "@/components/ui/badge";
+import { CopyButton } from "@/components/copy-button";
 import { Button } from "@/components/ui/button";
 import {
   Table,
@@ -16,25 +17,27 @@ import {
 import { cn } from "@/lib/utils";
 import type { RetrieverMode, SourceInfo } from "@/types/api";
 
-/** Which stage columns are meaningful for the strategy that ran. */
+/** Which retrieval stages the strategy runs, before any reranking. */
 const COLUMNS: Record<RetrieverMode, readonly StageKey[]> = {
   hybrid: ["dense", "sparse", "fused"],
   dense: ["dense"],
   sparse: ["sparse"],
 };
 
-type StageKey = "dense" | "sparse" | "fused";
+type StageKey = "dense" | "sparse" | "fused" | "reranker";
 
 const STAGE_LABEL: Record<StageKey, string> = {
   dense: "Dense",
   sparse: "BM25",
   fused: "Fused",
+  reranker: "Reranked",
 };
 
 const STAGE_UNITS: Record<StageKey, string> = {
   dense: "cosine similarity",
   sparse: "BM25 score",
   fused: "reciprocal rank fusion sum",
+  reranker: "cross-encoder relevance score",
 };
 
 /**
@@ -58,7 +61,13 @@ export function RetrievalTable({
   sources: readonly SourceInfo[];
   retriever: RetrieverMode;
 }) {
-  const columns = COLUMNS[retriever];
+  // Read from the results rather than from the requested setting. The reranker
+  // can be asked for and still not run — no model available, or nothing to
+  // rerank — and a column of dashes would misreport that as "scored nothing".
+  const reranked = sources.some((source) => source.scores?.reranker);
+  const columns: readonly StageKey[] = reranked
+    ? [...COLUMNS[retriever], "reranker"]
+    : COLUMNS[retriever];
 
   return (
     <div className="overflow-x-auto">
@@ -73,7 +82,9 @@ export function RetrievalTable({
               window — not that it scored zero.
             </>
           ) : null}{" "}
-          The cross-encoder reranker did not run, so no stage is shown for it.
+          {reranked
+            ? "Rows are in the cross-encoder's order; the earlier stages show where each chunk started."
+            : "The cross-encoder reranker did not run, so no stage is shown for it."}
         </TableCaption>
         <TableHeader>
           <TableRow>
@@ -124,17 +135,28 @@ function Row({ source, columns }: { source: SourceInfo; columns: readonly StageK
         >
           {source.text}
         </p>
-        {source.text.length > 140 ? (
-          <Button
-            variant="link"
-            size="xs"
-            className="h-auto px-0"
-            aria-expanded={expanded}
-            onClick={() => setExpanded((open) => !open)}
-          >
-            {expanded ? "Show less" : "Show more"}
-          </Button>
-        ) : null}
+        <div className="flex items-center gap-1">
+          {source.text.length > 140 ? (
+            <Button
+              variant="link"
+              size="xs"
+              className="h-auto px-0"
+              aria-expanded={expanded}
+              onClick={() => setExpanded((open) => !open)}
+            >
+              {expanded ? "Show less" : "Show more"}
+            </Button>
+          ) : null}
+          {/*
+            The whole chunk, not the clamped two lines: someone copying a source
+            wants what the model was given, which is the point of showing it.
+          */}
+          <CopyButton
+            value={source.text}
+            label="Copy"
+            className="h-auto px-2 py-0 text-xs"
+          />
+        </div>
       </TableCell>
       {columns.map((key) => (
         <TableCell key={key} className="align-top">

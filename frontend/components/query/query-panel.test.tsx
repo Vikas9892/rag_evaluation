@@ -19,7 +19,8 @@ vi.mock("next/navigation", () => ({
 }));
 
 const streamQuery = vi.hoisted(() => vi.fn());
-vi.mock("@/services/api", () => ({ streamQuery }));
+const getCorpora = vi.hoisted(() => vi.fn());
+vi.mock("@/services/api", () => ({ streamQuery, getCorpora }));
 
 const DONE = {
   request_id: "3f8a1c20-d42b-4e7e-9b5f-abcdef012345",
@@ -118,6 +119,24 @@ beforeEach(() => {
   window.localStorage.clear();
   streamQuery.mockReset();
   streamQuery.mockImplementation(emits(FULL_STREAM));
+  getCorpora.mockReset().mockResolvedValue({
+    corpora: [
+      {
+        corpus_id: "evaluation",
+        documents: 0,
+        chunks: 0,
+        ready: true,
+        is_evaluation: true,
+      },
+      {
+        corpus_id: "workspace",
+        documents: 1,
+        chunks: 6,
+        ready: true,
+        is_evaluation: false,
+      },
+    ],
+  });
   push.mockReset();
   replace.mockReset();
 });
@@ -141,10 +160,7 @@ describe("QueryPanel", () => {
     expect(await screen.findByText(ANSWER)).toBeInTheDocument();
     expect(streamQuery).toHaveBeenCalledWith(
       "what is ACID",
-      5,
-      expect.anything(),
-      "dense",
-      false,
+      expect.objectContaining({ topK: 5, retriever: "dense", reranker: false }),
     );
   });
 
@@ -156,10 +172,7 @@ describe("QueryPanel", () => {
     await waitFor(() =>
       expect(streamQuery).toHaveBeenCalledWith(
         "hello",
-        12,
-        expect.anything(),
-        "dense",
-        false,
+        expect.objectContaining({ topK: 12, retriever: "dense" }),
       ),
     );
   });
@@ -402,10 +415,7 @@ describe("QueryPanel", () => {
       await waitFor(() =>
         expect(streamQuery).toHaveBeenCalledWith(
           "hello",
-          5,
-          expect.anything(),
-          "sparse",
-          false,
+          expect.objectContaining({ retriever: "sparse" }),
         ),
       );
     });
@@ -450,6 +460,65 @@ describe("QueryPanel", () => {
       expect(window.localStorage.getItem("rag-eval.question-history.v1")).toContain(
         "remember me",
       );
+    });
+  });
+
+  describe("corpus", () => {
+    it("asks the benchmark corpus when the URL names none", async () => {
+      searchParams = new URLSearchParams("?q=hello");
+      renderPanel();
+
+      await waitFor(() =>
+        expect(streamQuery).toHaveBeenCalledWith(
+          "hello",
+          expect.objectContaining({ corpusId: "evaluation" }),
+        ),
+      );
+    });
+
+    it("asks the corpus named in the URL, so the workspace link works", async () => {
+      // The workspace's "Ask questions" link is exactly this URL. If the corpus
+      // were dropped, the answer would come from the benchmark documents and
+      // read as a retrieval failure against the file the user just uploaded.
+      searchParams = new URLSearchParams("?q=hello&corpus=workspace");
+      renderPanel();
+
+      await waitFor(() =>
+        expect(streamQuery).toHaveBeenCalledWith(
+          "hello",
+          expect.objectContaining({ corpusId: "workspace" }),
+        ),
+      );
+    });
+
+    it("falls back rather than sending a corpus id the API would refuse", async () => {
+      searchParams = new URLSearchParams("?q=hello&corpus=../../etc");
+      renderPanel();
+
+      await waitFor(() =>
+        expect(streamQuery).toHaveBeenCalledWith(
+          "hello",
+          expect.objectContaining({ corpusId: "evaluation" }),
+        ),
+      );
+    });
+
+    it("keeps the corpus in the URL when another setting changes", async () => {
+      searchParams = new URLSearchParams("?q=hello&corpus=workspace");
+      renderPanel();
+
+      await userEvent.selectOptions(await screen.findByLabelText(/retriever/i), "sparse");
+
+      expect(replace).toHaveBeenCalledWith(expect.stringContaining("corpus=workspace"));
+    });
+
+    it("offers the corpus from the URL even before the list loads", async () => {
+      getCorpora.mockReturnValue(new Promise(() => {}));
+      searchParams = new URLSearchParams("?q=hello&corpus=workspace");
+      renderPanel();
+
+      const select = (await screen.findByLabelText(/corpus/i)) as HTMLSelectElement;
+      expect(select.value).toBe("workspace");
     });
   });
 

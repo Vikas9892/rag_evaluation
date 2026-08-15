@@ -12,6 +12,7 @@ export interface QueryParams {
   topK: number;
   retriever: RetrieverMode;
   reranker: boolean;
+  corpus: string;
 }
 
 /**
@@ -40,6 +41,26 @@ export const RETRIEVERS = ["dense", "hybrid", "sparse"] as const;
 export const RETRIEVER_DEFAULT: RetrieverMode = "dense";
 
 /**
+ * The benchmark corpus, and the default when the URL names none.
+ *
+ * Matches `DEFAULT_CORPUS_ID` in corpora/layout.py: a link with no corpus must
+ * mean the same thing on both sides, or a shared result would silently be an
+ * answer from a different set of documents.
+ */
+export const CORPUS_DEFAULT = "evaluation";
+
+/**
+ * Mirrors `_VALID_CORPUS_ID` in corpora/layout.py.
+ *
+ * The API refuses anything else, so an id that cannot match is not sent: the
+ * check exists to keep a hand-edited URL from becoming a 422 banner. It is
+ * also why a bad value falls back rather than being rewritten — a sanitised
+ * corpus id would quietly answer from the wrong documents, which is worse
+ * than ignoring the parameter.
+ */
+const VALID_CORPUS_ID = /^[a-z0-9][a-z0-9_-]{0,63}$/;
+
+/**
  * Read params from a URL, repairing anything unusable.
  *
  * Never throws and never returns an out-of-range `topK`: these values come from
@@ -54,7 +75,13 @@ export function parseQueryParams(params: URLSearchParams): QueryParams {
     // Only an explicit "true" enables it. Anything else is off, so a mistyped
     // URL cannot silently add hundreds of milliseconds to every query.
     reranker: params.get("reranker") === "true",
+    corpus: parseCorpus(params.get("corpus")),
   };
+}
+
+function parseCorpus(raw: string | null): string {
+  const value = (raw ?? "").trim();
+  return VALID_CORPUS_ID.test(value) ? value : CORPUS_DEFAULT;
 }
 
 function parseRetriever(raw: string | null): RetrieverMode {
@@ -84,12 +111,19 @@ function parseTopK(raw: string | null): number {
  * `top_k` is omitted when it is the default so the common URL stays short and
  * two links to the same question compare equal.
  */
-export function buildQueryString({ q, topK, retriever, reranker }: QueryParams): string {
+export function buildQueryString({
+  q,
+  topK,
+  retriever,
+  reranker,
+  corpus,
+}: QueryParams): string {
   const params = new URLSearchParams();
   if (q) params.set("q", q);
   if (topK !== TOP_K_DEFAULT) params.set("top_k", String(topK));
   if (retriever !== RETRIEVER_DEFAULT) params.set("retriever", retriever);
   if (reranker) params.set("reranker", "true");
+  if (corpus && corpus !== CORPUS_DEFAULT) params.set("corpus", corpus);
   const encoded = params.toString();
   return encoded ? `?${encoded}` : "";
 }
