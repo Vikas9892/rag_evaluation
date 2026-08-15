@@ -398,3 +398,42 @@ class QueueStatusResponse(BaseModel):
     )
     workers: int
     note: str
+
+
+# ---------------------------------------------------------------------------
+# Settings taxonomy
+# ---------------------------------------------------------------------------
+
+
+class SettingDescriptor(BaseModel):
+    """One setting, and when it takes effect.
+
+    The distinction is the point. Top-K changes the next answer; chunk size
+    changes nothing until every document is re-embedded and re-indexed. A UI
+    that shows them side by side as equivalent sliders promises something the
+    system cannot do, so the API states the scope rather than leaving the
+    frontend to guess.
+    """
+
+    key: str
+    label: str
+    value: str = Field(description="The value in force, as text for display")
+    scope: Literal["query", "indexing", "generation"] = Field(
+        description=(
+            "query: applies to the next request. indexing: fixed when a document was "
+            "indexed. generation: applies to the next answer."
+        )
+    )
+    requires_reindex: bool = Field(
+        description="True when changing this invalidates every existing index"
+    )
+    editable_per_request: bool = Field(
+        description="True when a single request may override it"
+    )
+    note: Optional[str] = None
+
+
+class SettingsResponse(BaseModel):
+    groups: Dict[str, List[SettingDescriptor]] = Field(
+        description="Settings by area: retrieval, generation, indexing"
+    )

@@ -11,7 +11,14 @@ import shutil
 from fastapi import APIRouter, Depends
 
 from api.dependencies import get_service
-from api.schemas import ConfigResponse, DeepHealthResponse, HealthCheck, QueryRequest
+from api.schemas import (
+    ConfigResponse,
+    DeepHealthResponse,
+    HealthCheck,
+    QueryRequest,
+    SettingDescriptor,
+    SettingsResponse,
+)
 from config.logging_config import get_logger
 from config.settings import (
     CHUNK_OVERLAP,
@@ -64,6 +71,111 @@ async def config(service: RAGService = Depends(get_service)) -> ConfigResponse:
         reranker_enabled=False,
         reranker_available=True,
         default_retriever=QueryRequest.model_fields["retriever"].default,
+    )
+
+
+@router.get(
+    "/settings",
+    response_model=SettingsResponse,
+    summary="Every setting, grouped, with when it takes effect",
+    description=(
+        "Separates query-time settings from indexing-time ones. Changing chunk size "
+        "or the embedding model invalidates every existing index; changing top-K "
+        "affects only the next request."
+    ),
+    responses={503: {"description": "Pipeline not available"}},
+)
+async def settings(service: RAGService = Depends(get_service)) -> SettingsResponse:
+    def setting(key, label, value, scope, reindex, per_request, note=None):
+        return SettingDescriptor(
+            key=key,
+            label=label,
+            value=str(value),
+            scope=scope,
+            requires_reindex=reindex,
+            editable_per_request=per_request,
+            note=note,
+        )
+
+    return SettingsResponse(
+        groups={
+            "retrieval": [
+                setting(
+                    "retriever",
+                    "Retriever",
+                    QueryRequest.model_fields["retriever"].default,
+                    "query",
+                    False,
+                    True,
+                    "dense, sparse or hybrid — chosen per request.",
+                ),
+                setting("top_k", "Chunks retrieved", TOP_K, "query", False, True),
+                setting(
+                    "reranker",
+                    "Cross-encoder reranker",
+                    "off by default",
+                    "query",
+                    False,
+                    True,
+                    "Raises MRR and adds hundreds of milliseconds. Opt in per request.",
+                ),
+            ],
+            "generation": [
+                setting("llm_model", "Model", LLM_MODEL, "generation", False, False),
+                setting(
+                    "llm_temperature",
+                    "Temperature",
+                    LLM_TEMPERATURE,
+                    "generation",
+                    False,
+                    False,
+                    "Zero, so the same question and context give the same answer — a "
+                    "benchmark that moved on its own would measure nothing.",
+                ),
+                setting("llm_max_tokens", "Max tokens", LLM_MAX_TOKENS, "generation", False, False),
+                setting(
+                    "max_context_chunks",
+                    "Context chunks",
+                    MAX_CONTEXT_CHUNKS,
+                    "generation",
+                    False,
+                    False,
+                ),
+            ],
+            "indexing": [
+                setting(
+                    "embedding_model",
+                    "Embedding model",
+                    EMBEDDING_MODEL,
+                    "indexing",
+                    True,
+                    False,
+                    "Every vector was produced by this model. Changing it makes the "
+                    "existing index meaningless.",
+                ),
+                setting(
+                    "chunk_size",
+                    "Chunk size",
+                    CHUNK_SIZE,
+                    "indexing",
+                    True,
+                    True,
+                    "Fixed when a document is indexed. A new value applies only to "
+                    "documents uploaded afterwards.",
+                ),
+                setting("chunk_overlap", "Chunk overlap", CHUNK_OVERLAP, "indexing", True, True),
+                setting(
+                    "min_chunk_chars",
+                    "Minimum chunk",
+                    MIN_CHUNK_CHARS,
+                    "indexing",
+                    True,
+                    False,
+                    "Shorter chunks are merged into a neighbour, so heading-only "
+                    "chunks do not match a query while carrying none of the answer.",
+                ),
+            ],
+        }
     )
 
 

@@ -14,6 +14,7 @@ from typing import Callable, List, Optional
 import numpy as np
 
 from chunking.chunk import Chunk
+from chunking.config import DEFAULT_CHUNKING, ChunkingConfig, InvalidChunkingConfig
 from chunking.splitter import DocumentSplitter
 from config.logging_config import get_logger
 from corpora import corpus_layout
@@ -154,7 +155,10 @@ class DocumentIndexer:
         self._repo.set_status(job.document_id, DocumentStatus.CHUNKING)
         t0 = time.perf_counter()
 
-        splitter = self._splitter or self._build_splitter(job)
+        try:
+            splitter = self._splitter or self._build_splitter(job)
+        except InvalidChunkingConfig as exc:
+            raise IndexingError(str(exc)) from exc
         parsed = ParsedDocument(
             id=job.document_id,
             source=filename,
@@ -219,10 +223,20 @@ class DocumentIndexer:
 
     @staticmethod
     def _build_splitter(job: IndexingJob) -> DocumentSplitter:
-        """Chunking is an indexing-time decision, fixed when the job was created."""
-        kwargs = {}
-        if job.chunk_size is not None:
-            kwargs["chunk_size"] = job.chunk_size
-        if job.chunk_overlap is not None:
-            kwargs["chunk_overlap"] = job.chunk_overlap
-        return DocumentSplitter(**kwargs)
+        """Chunking is an indexing-time decision, fixed when the job was created.
+
+        Whatever the job carries is validated here rather than trusted: an
+        overlap larger than the chunk size would otherwise produce an index
+        nobody notices is broken until retrieval quality drops.
+        """
+        config = ChunkingConfig(
+            chunk_size=job.chunk_size or DEFAULT_CHUNKING.chunk_size,
+            chunk_overlap=(
+                job.chunk_overlap
+                if job.chunk_overlap is not None
+                else DEFAULT_CHUNKING.chunk_overlap
+            ),
+            min_chunk_chars=DEFAULT_CHUNKING.min_chunk_chars,
+            separators=DEFAULT_CHUNKING.separators,
+        )
+        return DocumentSplitter.from_config(config)

@@ -25,6 +25,21 @@ class DocumentSplitter:
     Overlap ensures context is preserved across chunk boundaries.
     """
 
+    @classmethod
+    def from_config(cls, config: "ChunkingConfig") -> "DocumentSplitter":
+        """Build from a validated configuration.
+
+        The individual keyword arguments stay for existing callers; this is the
+        entry point for anything that carries chunking settings around as a
+        unit, which is everything indexing-time.
+        """
+        return cls(
+            chunk_size=config.chunk_size,
+            chunk_overlap=config.chunk_overlap,
+            separators=config.separators,
+            min_chunk_chars=config.min_chunk_chars,
+        )
+
     def __init__(
         self,
         chunk_size: int = CHUNK_SIZE,
