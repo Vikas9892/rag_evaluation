@@ -23,6 +23,7 @@ vi.mock("@/services/api", () => ({ streamQuery }));
 
 const DONE = {
   request_id: "3f8a1c20-d42b-4e7e-9b5f-abcdef012345",
+  retriever: "hybrid" as const,
   retrieval_latency_ms: 4.2,
   generation_latency_ms: 1183,
   total_latency_ms: 1187.2,
@@ -106,7 +107,12 @@ describe("QueryPanel", () => {
     renderPanel();
 
     expect(await screen.findByText(ANSWER)).toBeInTheDocument();
-    expect(streamQuery).toHaveBeenCalledWith("what is ACID", 5, expect.anything());
+    expect(streamQuery).toHaveBeenCalledWith(
+      "what is ACID",
+      5,
+      expect.anything(),
+      "hybrid",
+    );
   });
 
   it("honours a non-default top_k from the URL", async () => {
@@ -115,7 +121,7 @@ describe("QueryPanel", () => {
     renderPanel();
 
     await waitFor(() =>
-      expect(streamQuery).toHaveBeenCalledWith("hello", 12, expect.anything()),
+      expect(streamQuery).toHaveBeenCalledWith("hello", 12, expect.anything(), "hybrid"),
     );
   });
 
@@ -318,6 +324,35 @@ describe("QueryPanel", () => {
       await userEvent.type(topK, "500{Enter}");
 
       expect(replace).toHaveBeenCalledWith("/query?q=hello&top_k=20");
+    });
+
+    it("sends the retriever chosen in the URL", async () => {
+      searchParams = new URLSearchParams("?q=hello&retriever=sparse");
+      renderPanel();
+
+      await waitFor(() =>
+        expect(streamQuery).toHaveBeenCalledWith("hello", 5, expect.anything(), "sparse"),
+      );
+    });
+
+    it("replaces the URL when the retriever changes", async () => {
+      searchParams = new URLSearchParams("?q=hello");
+      renderPanel();
+
+      await userEvent.selectOptions(screen.getByLabelText(/retriever/i), "dense");
+
+      expect(replace).toHaveBeenCalledWith("/query?q=hello&retriever=dense");
+      expect(push).not.toHaveBeenCalled();
+    });
+
+    it("keeps top_k when the retriever changes", async () => {
+      // Both settings live in one URL; changing either must not drop the other.
+      searchParams = new URLSearchParams("?q=hello&top_k=12");
+      renderPanel();
+
+      await userEvent.selectOptions(screen.getByLabelText(/retriever/i), "sparse");
+
+      expect(replace).toHaveBeenCalledWith("/query?q=hello&top_k=12&retriever=sparse");
     });
 
     it("remembers the question for future suggestions", async () => {

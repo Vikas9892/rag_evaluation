@@ -15,13 +15,16 @@ import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useQuestionHistory } from "@/hooks/use-question-history";
 import { useRagQuery, type RagAnswer } from "@/hooks/use-rag-query";
-import type { StreamDone } from "@/types/api";
+import type { RetrieverMode, StreamDone } from "@/types/api";
 import {
   buildQueryString,
   parseQueryParams,
+  RETRIEVERS,
   TOP_K_MAX,
   TOP_K_MIN,
 } from "@/lib/query-params";
+import { NativeSelect } from "@/components/ui/native-select";
+import { RetrievalTable } from "@/components/query/retrieval-table";
 
 /**
  * The query surface.
@@ -34,22 +37,24 @@ export function QueryPanel() {
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
-  const { q, topK } = parseQueryParams(new URLSearchParams(searchParams.toString()));
+  const { q, topK, retriever } = parseQueryParams(
+    new URLSearchParams(searchParams.toString()),
+  );
 
   const { history, remember, forget } = useQuestionHistory();
-  const { data, error, isFetching, refetch } = useRagQuery(q, topK);
+  const { data, error, isFetching, refetch } = useRagQuery(q, topK, retriever);
 
   function ask(question: string) {
     remember(question);
     // push, not replace: each question asked is a place the user can come back
     // to with the browser's Back button.
-    router.push(`${pathname}${buildQueryString({ q: question, topK })}`);
+    router.push(`${pathname}${buildQueryString({ q: question, topK, retriever })}`);
   }
 
-  function changeTopK(next: number) {
+  function changeSetting(next: Partial<{ topK: number; retriever: RetrieverMode }>) {
     // replace, not push: adjusting a setting is not a destination, and pushing
     // would make Back walk through every intermediate value.
-    router.replace(`${pathname}${buildQueryString({ q, topK: next })}`);
+    router.replace(`${pathname}${buildQueryString({ q, topK, retriever, ...next })}`);
   }
 
   return (
@@ -66,7 +71,27 @@ export function QueryPanel() {
         />
 
         <div className="flex flex-wrap items-center gap-4">
-          <TopKField value={topK} onCommit={changeTopK} />
+          <TopKField value={topK} onCommit={(next) => changeSetting({ topK: next })} />
+
+          <Field className="flex-row items-center gap-2">
+            <FieldLabel htmlFor="retriever" className="text-muted-foreground text-sm">
+              Retriever
+            </FieldLabel>
+            <NativeSelect
+              id="retriever"
+              value={retriever}
+              onChange={(event) =>
+                changeSetting({ retriever: event.target.value as RetrieverMode })
+              }
+              className="w-32"
+            >
+              {RETRIEVERS.map((option) => (
+                <option key={option} value={option}>
+                  {option}
+                </option>
+              ))}
+            </NativeSelect>
+          </Field>
 
           {history.length > 0 ? (
             <Button type="button" variant="ghost" size="sm" onClick={forget}>
@@ -81,6 +106,7 @@ export function QueryPanel() {
         isFetching={isFetching}
         error={error}
         data={data}
+        requestedRetriever={retriever}
         onRetry={() => void refetch()}
       />
     </div>
@@ -155,12 +181,14 @@ function Result({
   isFetching,
   error,
   data,
+  requestedRetriever,
   onRetry,
 }: {
   question: string;
   isFetching: boolean;
   error: unknown;
   data?: RagAnswer;
+  requestedRetriever: RetrieverMode;
   onRetry: () => void;
 }) {
   if (!question) {
@@ -233,10 +261,27 @@ function Result({
       {/* Kept below the answer, not instead of it. */}
       {error ? <ErrorState error={error} onRetry={onRetry} /> : null}
 
-      <PendingPanel milestone="Milestones 10–11">
-        Confidence, per-source attribution and the retrieval trace. The trace needs
-        per-stage scores the API does not expose yet: <code>HybridRetriever</code> fuses
-        dense and sparse into one number and discards the component ranks.
+      {data && data.sources.length > 0 ? (
+        <Card>
+          <CardHeader>
+            <CardTitle>Retrieval</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <RetrievalTable
+              sources={data.sources}
+              // The echo from the server is authoritative; the requested value
+              // stands in until `done` arrives, since sources render first.
+              retriever={data.metrics?.retriever ?? requestedRetriever}
+            />
+          </CardContent>
+        </Card>
+      ) : null}
+
+      <PendingPanel milestone="Milestones 10 and 12">
+        Whether the model abstained for lack of grounding, and the pipeline diagram. The
+        diagram needs per-stage timings the API does not report yet —{" "}
+        <code>PipelineStage</code> in the product spec — so it would have to guess which
+        stages ran and how long they took.
       </PendingPanel>
     </>
   );
