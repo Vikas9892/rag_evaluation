@@ -12,6 +12,7 @@ import pytest
 
 from chunking.chunk import Chunk
 from generation.prompt_builder import Prompt
+from retrieval.pipeline import PipelineStage
 from retrieval.ranking import RetrievalResult
 from services.rag_service import RAGService
 
@@ -45,11 +46,24 @@ class FakeRetriever:
     def retrieve(
         self, question: str, top_k: int, mode: str = "hybrid"
     ) -> List[RetrievalResult]:
+        results, _ = self.retrieve_traced(question, top_k, mode)
+        return results
+
+    def retrieve_traced(self, question: str, top_k: int, mode: str = "hybrid"):
         if self.raises:
             raise self.raises
         self.last_top_k = top_k
         self.last_mode = mode
-        return self.results
+        return self.results, [
+            PipelineStage(name="embedding", status="ok", latency_ms=0.1),
+            PipelineStage(
+                name="dense",
+                status="ok",
+                latency_ms=0.2,
+                candidates_in=19,
+                candidates_out=len(self.results),
+            ),
+        ]
 
 
 class FakeBuilder:
@@ -161,7 +175,28 @@ class TestDonePayload:
             "generation_latency_ms",
             "total_latency_ms",
             "first_token_latency_ms",
+            "pipeline",
         }
+
+    def test_carries_the_pipeline(self):
+        stages = self._done()["pipeline"]
+        assert [s["name"] for s in stages] == [
+            "embedding",
+            "dense",
+            "sparse",
+            "fusion",
+            "reranker",
+            "generation",
+        ]
+
+    def test_generation_is_reported_as_a_stage(self):
+        generation = next(
+            s for s in self._done()["pipeline"] if s["name"] == "generation"
+        )
+        assert generation["status"] == "ok"
+        assert generation["candidates_in"] == 2
+        # Generation emits prose, not a shortlist.
+        assert generation["candidates_out"] is None
 
     def test_echoes_which_retriever_ran(self):
         # Without this a null stage in a chunk's trace is ambiguous.

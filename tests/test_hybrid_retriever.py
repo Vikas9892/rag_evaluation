@@ -7,6 +7,7 @@ import pytest
 from chunking.chunk import Chunk
 from retrieval.bm25_store import BM25Store
 from retrieval.hybrid_retriever import HybridRetriever, _RRF_K
+from retrieval.pipeline import PipelineStage
 from retrieval.ranking import RetrievalResult
 
 
@@ -31,6 +32,20 @@ def _result(chunk: Chunk, score: float, rank: int) -> RetrievalResult:
 def _make_hybrid(dense_results: List[RetrievalResult], bm25_results: List[RetrievalResult]) -> HybridRetriever:
     dense_mock = MagicMock()
     dense_mock.retrieve.return_value = dense_results
+    # The hybrid retriever asks for stages as well as results now.
+    dense_mock.retrieve_traced.return_value = (
+        dense_results,
+        [
+            PipelineStage(name="embedding", status="ok", latency_ms=0.1),
+            PipelineStage(
+                name="dense",
+                status="ok",
+                latency_ms=0.2,
+                candidates_in=len(dense_results),
+                candidates_out=len(dense_results),
+            ),
+        ],
+    )
     dense_mock._store.ntotal = len(dense_results)
 
     chunks = [r.chunk for r in bm25_results]

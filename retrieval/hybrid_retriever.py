@@ -8,8 +8,9 @@ k=60 is the constant from the original paper; it dampens the impact of
 very-high-ranked documents so neither retriever can dominate completely.
 """
 import json
+import time
 from pathlib import Path
-from typing import List, Optional
+from typing import List, Optional, Tuple
 
 from config.logging_config import get_logger
 from config.settings import FAISS_INDEX_FILE, METADATA_FILE, TOP_K
@@ -17,6 +18,7 @@ from chunking.chunk import Chunk
 
 from .bm25_store import BM25Store
 from .faiss_store import FAISSStore
+from .pipeline import PipelineStage
 from .ranking import RetrievalResult, RetrievalTrace, RetrieverMode, StageScore
 from .retriever import Retriever
 
@@ -97,17 +99,55 @@ class HybridRetriever:
         exists for: *which* retriever found this, and where did the other one
         put it?
         """
+        results, _ = self.retrieve_traced(query, top_k=top_k, mode=mode)
+        return results
+
+    def retrieve_traced(
+        self,
+        query: str,
+        top_k: int = TOP_K,
+        mode: RetrieverMode = "hybrid",
+    ) -> Tuple[List[RetrievalResult], List[PipelineStage]]:
+        """Retrieve, and report which stages ran and what each cost.
+
+        The stage list is what makes the pipeline diagram honest. It is produced
+        here rather than inferred by the caller because only this method knows
+        what it chose to run: a sparse-only query embeds nothing, so `embedding`
+        is genuinely skipped, and that is not something a frontend could work
+        out from a result set.
+        """
         if mode == "dense":
-            return self._dense.retrieve(query, top_k=top_k)
+            results, stages = self._dense.retrieve_traced(query, top_k=top_k)
+            return results, stages
+
         if mode == "sparse":
-            return self._bm25.search(query, top_k=top_k)
+            t0 = time.perf_counter()
+            results = self._bm25.search(query, top_k=top_k)
+            sparse_ms = (time.perf_counter() - t0) * 1000
+            return results, [
+                # BM25 matches terms, so nothing is embedded. This is the one
+                # stage the live pipeline genuinely skips by request.
+                PipelineStage.skipped("embedding"),
+                PipelineStage(
+                    name="sparse",
+                    status="ok",
+                    latency_ms=sparse_ms,
+                    candidates_in=self._bm25.ntotal,
+                    candidates_out=len(results),
+                ),
+            ]
 
         # Fusion needs a wider window than it returns: a chunk ranked 30th by
         # one retriever and 2nd by the other should still surface.
         candidates = top_k * self._candidate_multiplier
 
-        dense_results = self._dense.retrieve(query, top_k=candidates)
+        dense_results, dense_pipeline = self._dense.retrieve_traced(query, top_k=candidates)
+
+        t_sparse = time.perf_counter()
         bm25_results = self._bm25.search(query, top_k=candidates)
+        sparse_ms = (time.perf_counter() - t_sparse) * 1000
+
+        t_fusion = time.perf_counter()
 
         rrf_scores: dict[str, float] = {}
         chunk_map: dict[str, Chunk] = {}
@@ -143,6 +183,8 @@ class HybridRetriever:
             for i, cid in enumerate(sorted_ids[:top_k])
         ]
 
+        fusion_ms = (time.perf_counter() - t_fusion) * 1000
+
         logger.info(
             "Hybrid query '%.40s...' -> %d result(s) (dense=%d, bm25=%d)",
             query,
@@ -150,4 +192,24 @@ class HybridRetriever:
             len(dense_results),
             len(bm25_results),
         )
-        return results
+
+        stages = [
+            *dense_pipeline,
+            PipelineStage(
+                name="sparse",
+                status="ok",
+                latency_ms=sparse_ms,
+                candidates_in=self._bm25.ntotal,
+                candidates_out=len(bm25_results),
+            ),
+            PipelineStage(
+                name="fusion",
+                status="ok",
+                latency_ms=fusion_ms,
+                # The union, not the sum: a chunk both retrievers found is one
+                # candidate, and double-counting it would overstate the funnel.
+                candidates_in=len(rrf_scores),
+                candidates_out=len(results),
+            ),
+        ]
+        return results, stages

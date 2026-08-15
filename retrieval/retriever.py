@@ -1,6 +1,7 @@
 import json
+import time
 from pathlib import Path
-from typing import List
+from typing import List, Tuple
 
 from config.logging_config import get_logger
 from config.settings import FAISS_INDEX_FILE, METADATA_FILE, TOP_K
@@ -8,6 +9,7 @@ from chunking.chunk import Chunk
 from embeddings.embedder import Embedder
 
 from .faiss_store import FAISSStore
+from .pipeline import PipelineStage
 from .ranking import RetrievalResult, RetrievalTrace, StageScore
 
 logger = get_logger(__name__)
@@ -53,12 +55,28 @@ class Retriever:
     # ------------------------------------------------------------------
 
     def retrieve(self, query: str, top_k: int = TOP_K) -> List[RetrievalResult]:
-        """Embed query, search FAISS, return RetrievalResult list sorted by score.
+        """Embed query, search FAISS, return RetrievalResult list sorted by score."""
+        results, _ = self.retrieve_traced(query, top_k=top_k)
+        return results
+
+    def retrieve_traced(
+        self, query: str, top_k: int = TOP_K
+    ) -> Tuple[List[RetrievalResult], List[PipelineStage]]:
+        """Retrieve, and report the embedding and search stages separately.
+
+        Embedding is timed apart from the search because they fail and scale for
+        different reasons: one is a model forward pass whose cost is fixed per
+        query, the other grows with the index. A single "retrieval" number hides
+        which of the two a slow query was waiting on.
 
         Indices returned by FAISS are guaranteed to align with self._metadata
         because both were written together by VectorStorage.save() in Phase 3.
         """
+        t0 = time.perf_counter()
         query_vector = self._embedder.embed(query)
+        embedding_ms = (time.perf_counter() - t0) * 1000
+
+        t1 = time.perf_counter()
         scores, indices = self._store.search(query_vector, top_k=top_k)
 
         results: List[RetrievalResult] = []
@@ -86,6 +104,8 @@ class Retriever:
                 )
             )
 
+        search_ms = (time.perf_counter() - t1) * 1000
+
         if results:
             logger.info(
                 "Query '%.40s...' -> %d result(s), top score: %.3f",
@@ -96,4 +116,22 @@ class Retriever:
         else:
             logger.info("Query '%.40s...' -> no results", query)
 
-        return results
+        stages = [
+            PipelineStage(
+                name="embedding",
+                status="ok",
+                latency_ms=embedding_ms,
+                # A question is not a candidate set; counting it as one would
+                # put a meaningless "1 → 1" on the diagram.
+                candidates_in=None,
+                candidates_out=None,
+            ),
+            PipelineStage(
+                name="dense",
+                status="ok",
+                latency_ms=search_ms,
+                candidates_in=self._store.ntotal,
+                candidates_out=len(results),
+            ),
+        ]
+        return results, stages

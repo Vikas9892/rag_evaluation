@@ -8,6 +8,7 @@ from config.logging_config import get_logger
 from config.settings import TOP_K
 from generation.generator import BaseGenerator
 from generation.prompt_builder import PromptBuilder
+from retrieval.pipeline import PipelineStage, fill_skipped
 from retrieval.ranking import RetrievalResult, RetrieverMode
 from retrieval.retriever import Retriever
 
@@ -21,6 +22,8 @@ class RAGResponse:
     retrieval_latency_ms: float
     generation_latency_ms: float
     request_id: str
+    #: Every stage in canonical order, including the ones that did not run.
+    pipeline: List[PipelineStage] = field(default_factory=list)
     #: Which strategy ran. Without it a null stage in a chunk's trace is
     #: ambiguous: "sparse did not run" and "sparse missed this chunk" look
     #: identical from the chunk alone.
@@ -113,7 +116,9 @@ class RAGService:
 
         try:
             t0 = time.perf_counter()
-            results = self._retriever.retrieve(question, top_k=k, mode=retriever)
+            results, retrieval_stages = self._retriever.retrieve_traced(
+                question, top_k=k, mode=retriever
+            )
             retrieval_ms = (time.perf_counter() - t0) * 1000
 
             prompt = self._builder.build(question, results)
@@ -147,6 +152,19 @@ class RAGService:
             generation_latency_ms=response.latency_ms,
             request_id=request_id,
             retriever=retriever,
+            pipeline=fill_skipped(
+                [
+                    *retrieval_stages,
+                    PipelineStage(
+                        name="generation",
+                        status="ok",
+                        latency_ms=response.latency_ms,
+                        candidates_in=len(results),
+                        # Generation emits prose, not a shortlist.
+                        candidates_out=None,
+                    ),
+                ]
+            ),
         )
 
     # ------------------------------------------------------------------
@@ -177,7 +195,9 @@ class RAGService:
 
         try:
             t0 = time.perf_counter()
-            results = self._retriever.retrieve(question, top_k=k, mode=retriever)
+            results, retrieval_stages = self._retriever.retrieve_traced(
+                question, top_k=k, mode=retriever
+            )
             retrieval_ms = (time.perf_counter() - t0) * 1000
 
             yield {"type": "sources", "data": [source_payload(r) for r in results]}
@@ -233,6 +253,21 @@ class RAGService:
                 "first_token_latency_ms": (
                     round(first_token_ms, 1) if first_token_ms is not None else None
                 ),
+                "pipeline": [
+                    stage.as_dict()
+                    for stage in fill_skipped(
+                        [
+                            *retrieval_stages,
+                            PipelineStage(
+                                name="generation",
+                                status="ok",
+                                latency_ms=generation_ms,
+                                candidates_in=len(results),
+                                candidates_out=None,
+                            ),
+                        ]
+                    )
+                ],
             },
         }
 

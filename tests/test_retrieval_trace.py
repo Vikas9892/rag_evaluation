@@ -13,6 +13,7 @@ import pytest
 from chunking.chunk import Chunk
 from retrieval.bm25_store import BM25Store
 from retrieval.hybrid_retriever import HybridRetriever
+from retrieval.pipeline import PipelineStage
 from retrieval.ranking import RetrievalResult, RetrievalTrace, StageScore
 
 
@@ -35,8 +36,12 @@ class FakeDense:
         self.last_top_k: int | None = None
 
     def retrieve(self, query: str, top_k: int) -> List[RetrievalResult]:
+        results, _ = self.retrieve_traced(query, top_k)
+        return results
+
+    def retrieve_traced(self, query: str, top_k: int):
         self.last_top_k = top_k
-        return [
+        results = [
             RetrievalResult(
                 chunk=c,
                 score=self.scores[i],
@@ -44,6 +49,16 @@ class FakeDense:
                 trace=RetrievalTrace(dense=StageScore(score=self.scores[i], rank=i + 1)),
             )
             for i, c in enumerate(self.chunks[:top_k])
+        ]
+        return results, [
+            PipelineStage(name="embedding", status="ok", latency_ms=0.1),
+            PipelineStage(
+                name="dense",
+                status="ok",
+                latency_ms=0.2,
+                candidates_in=len(self.chunks),
+                candidates_out=len(results),
+            ),
         ]
 
 

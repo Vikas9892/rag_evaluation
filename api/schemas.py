@@ -131,6 +131,34 @@ class MetricsResponse(BaseModel):
     errors: int = Field(description="Queries that raised before returning")
 
 
+class PipelineStageInfo(BaseModel):
+    """What one stage of the pipeline did.
+
+    `skipped` means the stage did not run — a sparse-only query embeds nothing,
+    and the cross-encoder reranker is not wired into the live path. The product
+    spec requires these to render differently from stages that ran, and the
+    diagram must never animate one that did not.
+
+    `error` is part of the contract but is not emitted today: a stage that
+    raises aborts the request, so no trace reaches the client.
+    """
+
+    name: Literal["embedding", "dense", "sparse", "fusion", "reranker", "generation"] = (
+        Field(description="Stage identity, in data-flow order")
+    )
+    status: Literal["ok", "skipped", "error"] = Field(description="Whether the stage ran")
+    latency_ms: float = Field(
+        description="Measured duration; 0 for a skipped stage, which is an absence "
+        "rather than a fast measurement"
+    )
+    candidates_in: Optional[int] = Field(
+        default=None, description="Candidates entering the stage; null where inapplicable"
+    )
+    candidates_out: Optional[int] = Field(
+        default=None, description="Candidates leaving the stage; null where inapplicable"
+    )
+
+
 class QueryResponse(BaseModel):
     model_config = ConfigDict(json_schema_extra={"example": _RESPONSE_EXAMPLE})
 
@@ -146,4 +174,8 @@ class QueryResponse(BaseModel):
             "Which strategy ran. Needed to read `sources[].scores`: it tells a "
             "null stage that did not run apart from one that missed a chunk."
         ),
+    )
+    pipeline: List[PipelineStageInfo] = Field(
+        default_factory=list,
+        description="Every stage in data-flow order, including those that did not run",
     )
