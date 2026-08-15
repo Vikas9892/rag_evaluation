@@ -143,7 +143,8 @@ describe("QueryPanel", () => {
       "what is ACID",
       5,
       expect.anything(),
-      "hybrid",
+      "dense",
+      false,
     );
   });
 
@@ -153,7 +154,13 @@ describe("QueryPanel", () => {
     renderPanel();
 
     await waitFor(() =>
-      expect(streamQuery).toHaveBeenCalledWith("hello", 12, expect.anything(), "hybrid"),
+      expect(streamQuery).toHaveBeenCalledWith(
+        "hello",
+        12,
+        expect.anything(),
+        "dense",
+        false,
+      ),
     );
   });
 
@@ -393,7 +400,13 @@ describe("QueryPanel", () => {
       renderPanel();
 
       await waitFor(() =>
-        expect(streamQuery).toHaveBeenCalledWith("hello", 5, expect.anything(), "sparse"),
+        expect(streamQuery).toHaveBeenCalledWith(
+          "hello",
+          5,
+          expect.anything(),
+          "sparse",
+          false,
+        ),
       );
     });
 
@@ -401,9 +414,9 @@ describe("QueryPanel", () => {
       searchParams = new URLSearchParams("?q=hello");
       renderPanel();
 
-      await userEvent.selectOptions(screen.getByLabelText(/retriever/i), "dense");
+      await userEvent.selectOptions(screen.getByLabelText(/retriever/i), "sparse");
 
-      expect(replace).toHaveBeenCalledWith("/query?q=hello&retriever=dense");
+      expect(replace).toHaveBeenCalledWith("/query?q=hello&retriever=sparse");
       expect(push).not.toHaveBeenCalled();
     });
 
@@ -412,9 +425,18 @@ describe("QueryPanel", () => {
       searchParams = new URLSearchParams("?q=hello&top_k=12");
       renderPanel();
 
-      await userEvent.selectOptions(screen.getByLabelText(/retriever/i), "sparse");
+      await userEvent.selectOptions(screen.getByLabelText(/retriever/i), "hybrid");
 
-      expect(replace).toHaveBeenCalledWith("/query?q=hello&top_k=12&retriever=sparse");
+      expect(replace).toHaveBeenCalledWith("/query?q=hello&top_k=12&retriever=hybrid");
+    });
+
+    it("carries the reranker in the URL so a reranked answer is citable", async () => {
+      searchParams = new URLSearchParams("?q=hello");
+      renderPanel();
+
+      await userEvent.click(screen.getByLabelText(/rerank/i));
+
+      expect(replace).toHaveBeenCalledWith("/query?q=hello&reranker=true");
     });
 
     it("remembers the question for future suggestions", async () => {

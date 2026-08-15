@@ -12,6 +12,7 @@ vi.mock("@/services/api", () => ({ getEvaluation }));
 const RESPONSE: EvaluationResponse = {
   top_k: 5,
   retriever: "hybrid",
+  reranker: false,
   dataset_size: 2,
   cached: false,
   metrics: {

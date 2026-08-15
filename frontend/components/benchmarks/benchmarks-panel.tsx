@@ -17,7 +17,8 @@ import { useBenchmarks } from "@/hooks/use-platform";
 import { cn } from "@/lib/utils";
 import type { BenchmarkCell, BenchmarkResponse } from "@/types/api";
 
-const label = (cell: BenchmarkCell) => `${cell.retriever} · top-${cell.top_k}`;
+const label = (cell: BenchmarkCell) =>
+  `${cell.retriever} · top-${cell.top_k}${cell.reranker ? " · reranked" : ""}`;
 
 /**
  * Every retriever at every top-K, measured on the same questions.
@@ -43,6 +44,19 @@ export function BenchmarksPanel() {
 
   return (
     <div className="space-y-6">
+      {data.pending > 0 ? (
+        <div className="rounded-lg border border-dashed p-4">
+          <p className="text-sm font-medium">
+            Measuring — {data.cells.length} of {data.cells.length + data.pending}{" "}
+            configurations done
+          </p>
+          <p className="text-muted-foreground mt-1 text-sm">
+            A cold sweep takes minutes, mostly in the reranker. The results below fill in
+            as they are measured; nothing here is estimated.
+          </p>
+        </div>
+      ) : null}
+
       <Verdict data={data} ranked={ranked} />
 
       <Card>
@@ -67,6 +81,10 @@ export function BenchmarksPanel() {
 }
 
 function Verdict({ data, ranked }: { data: BenchmarkResponse; ranked: BenchmarkCell[] }) {
+  // A partial matrix has nothing to conclude from yet, and saying so beats
+  // announcing a winner that the remaining cells might beat.
+  if (data.pending > 0) return null;
+
   if (!data.discriminating) {
     return (
       <div className="rounded-lg border border-dashed p-4">
@@ -144,6 +162,7 @@ function Matrix({ data, best }: { data: BenchmarkResponse; best?: BenchmarkCell 
           <TableRow>
             <TableHead>Retriever</TableHead>
             <TableHead className="w-16">K</TableHead>
+            <TableHead className="w-24">Rerank</TableHead>
             <TableHead className="w-28">Precision@K</TableHead>
             <TableHead className="w-24">Recall</TableHead>
             <TableHead className="w-24">MRR</TableHead>
@@ -163,6 +182,9 @@ function Matrix({ data, best }: { data: BenchmarkResponse; best?: BenchmarkCell 
                   ) : null}
                 </TableCell>
                 <TableCell className="font-mono text-sm">{cell.top_k}</TableCell>
+                <TableCell className="text-muted-foreground text-sm">
+                  {cell.reranker ? "on" : "off"}
+                </TableCell>
                 <TableCell className="font-mono text-sm">
                   {ratio(cell.metrics.precision_at_k)}
                 </TableCell>

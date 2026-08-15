@@ -204,6 +204,29 @@ class TestBenchmarks:
         # is flat — which is exactly the case the flag exists to catch.
         assert client.get("/benchmarks").json()["discriminating"] is False
 
+    def test_a_bounded_call_reports_what_is_still_pending(self, client, monkeypatch):
+        # A full sweep takes minutes; a request that long does not survive a
+        # proxy, a load balancer, or a client that hangs up.
+        monkeypatch.setattr(evaluation_router, "_BENCHMARK_BUDGET_SECONDS", -1)
+        body = client.get("/benchmarks").json()
+
+        assert body["pending"] > 0
+        assert body["cached"] is False
+
+    def test_a_partial_matrix_never_claims_to_discriminate(self, client, monkeypatch):
+        # Two cells that happen to tie are not evidence about the other sixteen.
+        monkeypatch.setattr(evaluation_router, "_BENCHMARK_BUDGET_SECONDS", -1)
+        assert client.get("/benchmarks").json()["discriminating"] is False
+
+    def test_repeated_calls_fill_the_matrix_in(self, client, monkeypatch):
+        monkeypatch.setattr(evaluation_router, "_BENCHMARK_BUDGET_SECONDS", -1)
+        client.get("/benchmarks")
+        monkeypatch.setattr(evaluation_router, "_BENCHMARK_BUDGET_SECONDS", 60)
+
+        body = client.get("/benchmarks").json()
+        assert body["pending"] == 0
+        assert len(body["cells"]) == 18
+
     def test_reuses_the_evaluation_cache(self, client, service):
         client.get("/benchmarks")
         after_matrix = len(service.retriever.calls)

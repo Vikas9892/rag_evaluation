@@ -13,10 +13,12 @@ function cell(
   retriever: BenchmarkCell["retriever"],
   top_k: number,
   mrr: number,
+  reranker = false,
 ): BenchmarkCell {
   return {
     retriever,
     top_k,
+    reranker,
     metrics: {
       precision_at_k: 0.2,
       recall_at_k: 0.9,
@@ -29,6 +31,7 @@ function cell(
 
 const DISCRIMINATING: BenchmarkResponse = {
   dataset_size: 15,
+  pending: 0,
   cached: true,
   discriminating: true,
   cells: [cell("dense", 5, 1.0), cell("hybrid", 5, 0.9133), cell("sparse", 5, 0.8056)],
@@ -36,6 +39,7 @@ const DISCRIMINATING: BenchmarkResponse = {
 
 const FLAT: BenchmarkResponse = {
   dataset_size: 15,
+  pending: 0,
   cached: true,
   discriminating: false,
   cells: [cell("dense", 5, 1.0), cell("hybrid", 5, 1.0), cell("sparse", 5, 1.0)],
@@ -55,6 +59,18 @@ beforeEach(() => {
 });
 
 describe("BenchmarksPanel", () => {
+  it("reports progress instead of a verdict while cells are still pending", async () => {
+    // A partial matrix has nothing to conclude from, and announcing a winner
+    // the remaining cells might beat would be worse than saying nothing.
+    getBenchmarks.mockResolvedValue({ ...DISCRIMINATING, pending: 15, cached: false });
+    renderPanel();
+
+    expect(await screen.findByText(/3 of 18 configurations done/)).toBeInTheDocument();
+    expect(
+      screen.queryByText(/ranks the first relevant chunk highest/),
+    ).not.toBeInTheDocument();
+  });
+
   it("lists every configuration", async () => {
     renderPanel();
     const table = await screen.findByRole("table");

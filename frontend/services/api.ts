@@ -173,11 +173,17 @@ export function postQuery(
 }
 
 /** Omits defaults so the request carries only what the caller chose. */
-function requestBody(question: string, topK?: number, retriever?: RetrieverMode) {
+function requestBody(
+  question: string,
+  topK?: number,
+  retriever?: RetrieverMode,
+  reranker?: boolean,
+) {
   return {
     question,
     ...(topK === undefined ? {} : { top_k: topK }),
     ...(retriever === undefined ? {} : { retriever }),
+    ...(reranker ? { reranker: true } : {}),
   };
 }
 
@@ -193,13 +199,14 @@ export async function* streamQuery(
   topK?: number,
   signal?: AbortSignal,
   retriever?: RetrieverMode,
+  reranker?: boolean,
 ): AsyncGenerator<StreamEvent> {
   let response: Response;
   try {
     response = await fetch(`${apiBaseUrl()}/stream`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(requestBody(question, topK, retriever)),
+      body: JSON.stringify(requestBody(question, topK, retriever, reranker)),
       signal,
     });
   } catch (cause) {

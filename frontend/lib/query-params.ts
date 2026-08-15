@@ -11,6 +11,7 @@ export interface QueryParams {
   q: string;
   topK: number;
   retriever: RetrieverMode;
+  reranker: boolean;
 }
 
 /**
@@ -50,6 +51,9 @@ export function parseQueryParams(params: URLSearchParams): QueryParams {
     q: (params.get("q") ?? "").trim(),
     topK: parseTopK(params.get("top_k")),
     retriever: parseRetriever(params.get("retriever")),
+    // Only an explicit "true" enables it. Anything else is off, so a mistyped
+    // URL cannot silently add hundreds of milliseconds to every query.
+    reranker: params.get("reranker") === "true",
   };
 }
 
@@ -80,11 +84,12 @@ function parseTopK(raw: string | null): number {
  * `top_k` is omitted when it is the default so the common URL stays short and
  * two links to the same question compare equal.
  */
-export function buildQueryString({ q, topK, retriever }: QueryParams): string {
+export function buildQueryString({ q, topK, retriever, reranker }: QueryParams): string {
   const params = new URLSearchParams();
   if (q) params.set("q", q);
   if (topK !== TOP_K_DEFAULT) params.set("top_k", String(topK));
   if (retriever !== RETRIEVER_DEFAULT) params.set("retriever", retriever);
+  if (reranker) params.set("reranker", "true");
   const encoded = params.toString();
   return encoded ? `?${encoded}` : "";
 }

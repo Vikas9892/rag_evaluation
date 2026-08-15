@@ -45,5 +45,9 @@ export function useBenchmarks() {
     queryKey: ["benchmarks"],
     queryFn: ({ signal }) => getBenchmarks(signal),
     staleTime: 10 * 60_000,
+    // The API measures a bounded number of configurations per call and reports
+    // the rest as pending, because a full cold sweep takes minutes and a request
+    // that long does not survive a proxy. Polling continues the run.
+    refetchInterval: (query) => (query.state.data?.pending ? 2_000 : false),
   });
 }

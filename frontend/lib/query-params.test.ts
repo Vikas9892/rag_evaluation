@@ -18,6 +18,7 @@ describe("parseQueryParams", () => {
       q: "what is ACID",
       topK: 8,
       retriever: RETRIEVER_DEFAULT,
+      reranker: false,
     });
   });
 
@@ -63,19 +64,34 @@ describe("parseQueryParams", () => {
 describe("buildQueryString", () => {
   it("omits top_k at its default so links to the same question compare equal", () => {
     expect(
-      buildQueryString({ q: "hello", topK: TOP_K_DEFAULT, retriever: RETRIEVER_DEFAULT }),
+      buildQueryString({
+        q: "hello",
+        topK: TOP_K_DEFAULT,
+        retriever: RETRIEVER_DEFAULT,
+        reranker: false,
+      }),
     ).toBe("?q=hello");
   });
 
   it("includes a non-default top_k", () => {
-    expect(buildQueryString({ q: "hello", topK: 10, retriever: RETRIEVER_DEFAULT })).toBe(
-      "?q=hello&top_k=10",
-    );
+    expect(
+      buildQueryString({
+        q: "hello",
+        topK: 10,
+        retriever: RETRIEVER_DEFAULT,
+        reranker: false,
+      }),
+    ).toBe("?q=hello&top_k=10");
   });
 
   it("returns an empty string when there is nothing to carry", () => {
     expect(
-      buildQueryString({ q: "", topK: TOP_K_DEFAULT, retriever: RETRIEVER_DEFAULT }),
+      buildQueryString({
+        q: "",
+        topK: TOP_K_DEFAULT,
+        retriever: RETRIEVER_DEFAULT,
+        reranker: false,
+      }),
     ).toBe("");
   });
 
@@ -84,13 +100,19 @@ describe("buildQueryString", () => {
       q: "a&b=c?d #e",
       topK: TOP_K_DEFAULT,
       retriever: RETRIEVER_DEFAULT,
+      reranker: false,
     });
     expect(encoded).not.toMatch(/[ #]/);
     expect(parse(encoded).q).toBe("a&b=c?d #e");
   });
 
   it("round-trips through parse", () => {
-    const original = { q: "What is a deadlock?", topK: 12, retriever: "sparse" as const };
+    const original = {
+      q: "What is a deadlock?",
+      topK: 12,
+      retriever: "sparse" as const,
+      reranker: false,
+    };
     expect(parse(buildQueryString(original))).toEqual(original);
   });
 });
@@ -116,18 +138,34 @@ describe("retriever", () => {
 
   it("is omitted from the URL at its default", () => {
     expect(
-      buildQueryString({ q: "hello", topK: TOP_K_DEFAULT, retriever: RETRIEVER_DEFAULT }),
+      buildQueryString({
+        q: "hello",
+        topK: TOP_K_DEFAULT,
+        retriever: RETRIEVER_DEFAULT,
+        reranker: false,
+      }),
     ).toBe("?q=hello");
   });
 
   it("is carried in the URL when chosen", () => {
+    // Dense is the default now, so it is the one that gets omitted.
     expect(
-      buildQueryString({ q: "hello", topK: TOP_K_DEFAULT, retriever: "dense" }),
-    ).toBe("?q=hello&retriever=dense");
+      buildQueryString({
+        q: "hello",
+        topK: TOP_K_DEFAULT,
+        retriever: "hybrid",
+        reranker: false,
+      }),
+    ).toBe("?q=hello&retriever=hybrid");
   });
 
   it("survives a round trip alongside top_k", () => {
-    const original = { q: "hello", topK: 12, retriever: "sparse" as const };
+    const original = {
+      q: "hello",
+      topK: 12,
+      retriever: "sparse" as const,
+      reranker: false,
+    };
     expect(parse(buildQueryString(original))).toEqual(original);
   });
 });

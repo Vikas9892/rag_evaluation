@@ -236,8 +236,14 @@ class ConfigResponse(BaseModel):
     indexed_chunks: int = Field(description="Chunks in the index")
     documents: int = Field(description="Distinct source documents behind them")
     reranker_enabled: bool = Field(
-        description="Whether the cross-encoder runs in the live path; it is implemented "
-        "but not wired, and the pipeline trace reports it skipped"
+        description="Whether the cross-encoder runs by default; it does not, because it "
+        "costs hundreds of milliseconds for a small MRR gain"
+    )
+    reranker_available: bool = Field(
+        default=True, description="Whether a request may switch the cross-encoder on"
+    )
+    default_retriever: str = Field(
+        default="dense", description="Strategy used when a request does not choose one"
     )
 
 
@@ -289,6 +295,14 @@ class BenchmarkCell(BaseModel):
 class BenchmarkResponse(BaseModel):
     dataset_size: int
     cells: List[BenchmarkCell]
+    pending: int = Field(
+        default=0,
+        description=(
+            "Configurations not yet measured. The sweep takes minutes on a cold cache, "
+            "so each call does a bounded amount of work and leaves the rest; ask again "
+            "to continue. Zero means the matrix is complete."
+        ),
+    )
     cached: bool
     discriminating: bool = Field(
         description="False when every configuration scores identically, which means the "

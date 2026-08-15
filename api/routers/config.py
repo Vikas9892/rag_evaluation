@@ -11,7 +11,7 @@ import shutil
 from fastapi import APIRouter, Depends
 
 from api.dependencies import get_service
-from api.schemas import ConfigResponse, DeepHealthResponse, HealthCheck
+from api.schemas import ConfigResponse, DeepHealthResponse, HealthCheck, QueryRequest
 from config.logging_config import get_logger
 from config.settings import (
     CHUNK_OVERLAP,
@@ -59,7 +59,11 @@ async def config(service: RAGService = Depends(get_service)) -> ConfigResponse:
         retrievers=list(RetrieverMode.__args__),
         indexed_chunks=service.corpus_size(),
         documents=service.document_count(),
+        # Available per request, off by default: it lifts MRR but costs
+        # hundreds of milliseconds against a 300-600 ms generation step.
         reranker_enabled=False,
+        reranker_available=True,
+        default_retriever=QueryRequest.model_fields["retriever"].default,
     )
 
 

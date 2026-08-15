@@ -9,6 +9,7 @@ Retrieval evaluation costs no LLM calls, so it runs on request. Generation
 evaluation does, so it is opt-in.
 """
 
+import os
 import time
 from threading import Lock
 from typing import Dict, List, Optional, Tuple
@@ -40,6 +41,17 @@ _BENCHMARK_RETRIEVERS: Tuple[RetrieverMode, ...] = ("dense", "sparse", "hybrid")
 # Whether the cross-encoder earns its latency is exactly the sort of question
 # this platform exists to answer, so it is swept rather than assumed.
 _BENCHMARK_RERANKER: Tuple[bool, ...] = (False, True)
+
+# How long one /benchmarks call may spend computing uncached cells.
+#
+# The full sweep takes minutes — reranking scores every candidate for every
+# question in the dataset — and a request that long does not survive contact
+# with a proxy, a load balancer or an impatient client. It killed the dev server
+# outright when a client hung up mid-run. So each call does a bounded amount of
+# work, returns what it has, and names what is still pending; the client asks
+# again to continue. Progress accumulates in the cache, so the matrix fills in
+# across a few requests instead of failing on one.
+_BENCHMARK_BUDGET_SECONDS = float(os.environ.get("BENCHMARK_BUDGET_SECONDS", "20"))
 
 # An evaluation run embeds every question in the dataset, so the same request
 # twice would pay the same ~2 s twice. Results are pure functions of (dataset,
@@ -163,16 +175,26 @@ async def evaluation(
 )
 async def benchmarks(service: RAGService = Depends(get_service)) -> BenchmarkResponse:
     cells: List[BenchmarkCell] = []
-    any_uncached = False
+    pending = 0
+    deadline = time.monotonic() + _BENCHMARK_BUDGET_SECONDS
 
     for retriever in _BENCHMARK_RETRIEVERS:
         for k in _BENCHMARK_TOP_K:
             for rerank in _BENCHMARK_RERANKER:
-                (samples, aggregate), cached = _cached(
-                    ("eval", k, retriever, rerank),
+                key = ("eval", k, retriever, rerank)
+                with _cache_lock:
+                    already = key in _cache
+
+                # Past the budget, an uncached cell is left for the next call
+                # rather than making this one run long enough to be dropped.
+                if not already and time.monotonic() >= deadline:
+                    pending += 1
+                    continue
+
+                (samples, aggregate), _ = _cached(
+                    key,
                     lambda r=retriever, kk=k, rr=rerank: _evaluate(service, kk, r, rr),
                 )
-                any_uncached = any_uncached or not cached
                 cells.append(
                     BenchmarkCell(
                         retriever=retriever,
@@ -194,10 +216,14 @@ async def benchmarks(service: RAGService = Depends(get_service)) -> BenchmarkRes
     return BenchmarkResponse(
         dataset_size=dataset_size,
         cells=cells,
-        cached=not any_uncached,
+        pending=pending,
+        cached=pending == 0,
         # Surfaced rather than left for the reader to notice: when every
         # configuration scores the same, the matrix is measuring the corpus and
         # not the retriever, and presenting it as a comparison would be a claim
         # the data does not support.
-        discriminating=len(distinct_mrr) > 1,
+        # Only meaningful once every cell is in. A partial matrix where the
+        # first two cells happen to tie is not evidence that nothing separates
+        # the configurations.
+        discriminating=pending == 0 and len(distinct_mrr) > 1,
     )

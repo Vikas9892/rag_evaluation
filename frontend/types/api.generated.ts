@@ -197,6 +197,11 @@ export interface components {
             retriever: "dense" | "sparse" | "hybrid";
             /** Top K */
             top_k: number;
+            /**
+             * Reranker
+             * @default false
+             */
+            reranker: boolean;
             metrics: components["schemas"]["RetrievalMetrics"];
         };
         /** BenchmarkResponse */
@@ -205,6 +210,12 @@ export interface components {
             dataset_size: number;
             /** Cells */
             cells: components["schemas"]["BenchmarkCell"][];
+            /**
+             * Pending
+             * @description Configurations not yet measured. The sweep takes minutes on a cold cache, so each call does a bounded amount of work and leaves the rest; ask again to continue. Zero means the matrix is complete.
+             * @default 0
+             */
+            pending: number;
             /** Cached */
             cached: boolean;
             /**
@@ -253,9 +264,21 @@ export interface components {
             documents: number;
             /**
              * Reranker Enabled
-             * @description Whether the cross-encoder runs in the live path; it is implemented but not wired, and the pipeline trace reports it skipped
+             * @description Whether the cross-encoder runs by default; it does not, because it costs hundreds of milliseconds for a small MRR gain
              */
             reranker_enabled: boolean;
+            /**
+             * Reranker Available
+             * @description Whether a request may switch the cross-encoder on
+             * @default true
+             */
+            reranker_available: boolean;
+            /**
+             * Default Retriever
+             * @description Strategy used when a request does not choose one
+             * @default dense
+             */
+            default_retriever: string;
         };
         /** DeepHealthResponse */
         DeepHealthResponse: {
@@ -280,6 +303,11 @@ export interface components {
              * @enum {string}
              */
             retriever: "dense" | "sparse" | "hybrid";
+            /**
+             * Reranker
+             * @default false
+             */
+            reranker: boolean;
             /** Dataset Size */
             dataset_size: number;
             /**
@@ -450,9 +478,15 @@ export interface components {
              */
             top_k: number;
             /**
+             * Reranker
+             * @description Run the cross-encoder over the retrieved candidates. Far more accurate per candidate and far slower — one model forward pass each — so it is opt-in and the retriever fetches a wider candidate list when it is on.
+             * @default false
+             */
+            reranker: boolean;
+            /**
              * Retriever
              * @description Retrieval strategy. 'dense' is embedding similarity alone, 'sparse' is BM25 keyword matching alone, 'hybrid' fuses both with Reciprocal Rank Fusion. Comparing them is the point of the platform, so it is chosen per request rather than per deployment.
-             * @default hybrid
+             * @default dense
              * @enum {string}
              */
             retriever: "dense" | "sparse" | "hybrid";
@@ -850,6 +884,7 @@ export interface operations {
             query?: {
                 top_k?: number;
                 retriever?: "dense" | "sparse" | "hybrid";
+                reranker?: boolean;
             };
             header?: never;
             path?: never;

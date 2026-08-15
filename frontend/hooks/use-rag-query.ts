@@ -23,11 +23,16 @@ export interface RagAnswer {
 
 const EMPTY: RagAnswer = { answer: "", sources: [], complete: false, metrics: null };
 
-export function ragQueryKey(question: string, topK: number, retriever: RetrieverMode) {
+export function ragQueryKey(
+  question: string,
+  topK: number,
+  retriever: RetrieverMode,
+  reranker: boolean,
+) {
   // The retriever is part of the identity of an answer, not a detail of how it
   // was fetched: the same question under dense and under hybrid are two
   // different results, and sharing a cache entry would show one as the other.
-  return ["rag-query", question, topK, retriever] as const;
+  return ["rag-query", question, topK, retriever, reranker] as const;
 }
 
 /**
@@ -42,9 +47,14 @@ export function ragQueryKey(question: string, topK: number, retriever: Retriever
  * The signal comes from react-query, so navigating away aborts the request
  * mid-stream instead of leaving the connection reading into a dead component.
  */
-export function useRagQuery(question: string, topK: number, retriever: RetrieverMode) {
+export function useRagQuery(
+  question: string,
+  topK: number,
+  retriever: RetrieverMode,
+  reranker: boolean,
+) {
   return useQuery<RagAnswer>({
-    queryKey: ragQueryKey(question, topK, retriever),
+    queryKey: ragQueryKey(question, topK, retriever, reranker),
     queryFn: async ({ signal, client, queryKey }) => {
       let current: RagAnswer = EMPTY;
 
@@ -57,7 +67,13 @@ export function useRagQuery(question: string, topK: number, retriever: Retriever
 
       publish({});
 
-      for await (const event of streamQuery(question, topK, signal, retriever)) {
+      for await (const event of streamQuery(
+        question,
+        topK,
+        signal,
+        retriever,
+        reranker,
+      )) {
         switch (event.type) {
           case "sources":
             publish({ sources: event.data });

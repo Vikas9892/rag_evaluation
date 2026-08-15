@@ -37,24 +37,30 @@ export function QueryPanel() {
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
-  const { q, topK, retriever } = parseQueryParams(
+  const { q, topK, retriever, reranker } = parseQueryParams(
     new URLSearchParams(searchParams.toString()),
   );
 
   const { history, remember, forget } = useQuestionHistory();
-  const { data, error, isFetching, refetch } = useRagQuery(q, topK, retriever);
+  const { data, error, isFetching, refetch } = useRagQuery(q, topK, retriever, reranker);
 
   function ask(question: string) {
     remember(question);
     // push, not replace: each question asked is a place the user can come back
     // to with the browser's Back button.
-    router.push(`${pathname}${buildQueryString({ q: question, topK, retriever })}`);
+    router.push(
+      `${pathname}${buildQueryString({ q: question, topK, retriever, reranker })}`,
+    );
   }
 
-  function changeSetting(next: Partial<{ topK: number; retriever: RetrieverMode }>) {
+  function changeSetting(
+    next: Partial<{ topK: number; retriever: RetrieverMode; reranker: boolean }>,
+  ) {
     // replace, not push: adjusting a setting is not a destination, and pushing
     // would make Back walk through every intermediate value.
-    router.replace(`${pathname}${buildQueryString({ q, topK, retriever, ...next })}`);
+    router.replace(
+      `${pathname}${buildQueryString({ q, topK, retriever, reranker, ...next })}`,
+    );
   }
 
   return (
@@ -95,6 +101,21 @@ export function QueryPanel() {
               ))}
             </NativeSelect>
           </Field>
+
+          <label className="text-muted-foreground flex items-center gap-2 text-sm">
+            <input
+              type="checkbox"
+              checked={reranker}
+              onChange={(event) => changeSetting({ reranker: event.target.checked })}
+              className="size-4"
+            />
+            {/*
+              Off by default and labelled with its cost, because it lifts MRR by
+              ~0.04 and adds hundreds of milliseconds against a generation step
+              of 300-600 ms — a trade worth making deliberately.
+            */}
+            Rerank <span className="text-xs">(slower, more accurate)</span>
+          </label>
 
           {history.length > 0 ? (
             <Button type="button" variant="ghost" size="sm" onClick={forget}>
