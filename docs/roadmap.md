@@ -90,7 +90,7 @@ hook. No page consumes these yet; the first real consumer is M8.
 
 | # | Milestone | Status | Notes |
 |---|---|---|---|
-| 8 | Question input — autocomplete, history, clear | ✅ | `54b39df` — `/query?q=…&top_k=10`; the retriever selector is now unblocked but not built |
+| 8 | Question input — autocomplete, history, clear | ✅ | `54b39df`, `b452fab` — `/query?q=…&top_k=10&retriever=dense` |
 | 9 | Streaming answer via `/stream` | ✅ | `7a929ea`, `e3484b9` |
 | 10 | Answer UI — answer, confidence, sources, latency | 🟡 | answer, latency and time-to-first-token render; confidence and per-source attribution do not |
 
@@ -106,17 +106,17 @@ A measurement worth keeping: on a short answer the first token arrived at
 streaming bought almost nothing in perceived latency here. It will matter on
 long answers; on short ones it is close to theatre.
 
-**The third blocker is cleared too.** The settings placeholder promised
-`/query?q=…&top_k=10&retriever=hybrid`, and `retriever` was not a request
-parameter. It is now (`88b4672`), so the selector is buildable — it just is not
-built. The settings page still describes a control that does not exist, and the
-reranker half of it stays blocked on open decision 2.
+**The third blocker is cleared.** The settings placeholder promised
+`/query?q=…&top_k=10&retriever=hybrid`; `retriever` became a request parameter
+in `88b4672` and the selector shipped in `b452fab`. The settings *page* is still
+a placeholder — the controls live on the query page, where they are used — and
+its reranker toggle stays blocked on open decision 2.
 
 ## Phase 5 — Retrieval visualisation
 
 | # | Milestone | Status | Notes |
 |---|---|---|---|
-| 11 | Retrieved chunks — rank, similarity, source, chunk, metadata | 🟡 | `a1881b9`, `88b4672` — **unblocked**; the API serves the trace, no UI consumes it yet |
+| 11 | Retrieved chunks — rank, similarity, source, chunk, metadata | ✅ | `b850d77` |
 | 12 | Pipeline visualisation (query → embedding → dense → sparse → fusion → reranker → LLM) | ⬜ | needs `PipelineStage` (spec §6.2), which is not built |
 
 **The M11 blocker is cleared.** `HybridRetriever` no longer discards component
@@ -135,9 +135,24 @@ A live query shows why the table is worth building: dense's rank-1 chunk was
 never surfaced by sparse (fused rank 3), while sparse's rank-1 chunk was dense's
 rank 9 (fused rank 2). The retrievers disagree substantially.
 
-**Still outstanding for M11:** the UI itself, and `PipelineStage` for M12. The
-reranker stays absent from every trace because it is not wired into the live
-path — open decision 2 below.
+The table leads with **rank**, not score, because rank is the only thing
+comparable across stages: dense is cosine (~0.5), sparse is BM25 (unbounded,
+often >1), fused is an RRF sum (~0.03). Any shared visual scale would assert a
+comparison that does not exist, so there are no bars and no heat colours.
+
+Columns cover only the stages the chosen strategy runs — a dense query has no
+BM25 column, because a column of dashes reads as "BM25 found nothing" rather
+than "BM25 was not asked". Within hybrid, a dash *does* mean the retriever
+missed that chunk, and the caption says so.
+
+**What it immediately showed.** On "What is ACID?", dense alone ranks the ACID
+Properties section first; hybrid demotes it to third because BM25 never
+surfaced it. Fusion is losing to its own dense half on this query. Whether that
+generalises is exactly what Milestone 15 would answer, and cannot at this corpus
+size.
+
+The reranker stays absent from every trace because it is not wired into the
+live path — open decision 2 below.
 
 ## Phase 6 — Evaluation dashboard
 
@@ -213,17 +228,19 @@ These were raised before Milestone 2 and are still unanswered:
 
 ## Suggested next step
 
-**Milestone 11 — the retrieval table**, now that the data exists. It is the
-feature that makes this platform distinctive, and every field it needs is on the
-wire: per-stage scores and ranks, the chunk text, and the retriever that ran.
-M10's remaining half (per-source attribution) falls out of the same work, since
-both render the same `sources` array.
+**Milestone 12 — the pipeline visualisation**, which needs one backend piece
+first: `PipelineStage` from spec §6.2, carrying each stage's status, latency and
+candidate counts. Without it the diagram would have to guess which stages ran
+and how long they took, and the spec is explicit that it must never animate a
+stage that did not execute.
 
-Then **Milestone 12** needs one more backend piece — `PipelineStage` from spec
-§6.2 — before the diagram can be honest about which stages executed.
+Alternatively **grow the corpus**, which is the prerequisite for the whole of
+Phase 6. Three separate findings now point at it: MRR pinned at 1.00, BM25's IDF
+flooring to zero on a term in half the corpus, and the hybrid-versus-dense
+result above being a single anecdote rather than a measurement.
 
-M15 stays blocked on the corpus, and the BM25 IDF finding in
-`tests/test_retrieval_trace.py` is further evidence for growing it.
+M10's remaining half — whether the model abstained for lack of grounding — is
+small and independent of both.
 
 ---
 

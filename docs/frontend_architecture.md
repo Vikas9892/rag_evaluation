@@ -224,6 +224,14 @@ what makes disagreement legible.
 `StreamSource` is an alias of the generated `SourceInfo`: one serialiser feeds both
 `/query` and the stream, and a Python contract test fails if they drift.
 
+**Never put two stages on one scale.** `RetrievalTable` shows rank as the primary figure
+and score as secondary text in its own units — no bars, no heat colours, no shared axis.
+Cosine ~0.5, BM25 >1 and an RRF sum ~0.03 are not the same quantity, and a chart that
+implies otherwise is a false claim about the data, not a styling choice.
+
+Columns are restricted to the stages the chosen strategy runs, so a blank never has to
+carry the ambiguity the `retriever` field exists to resolve.
+
 ## Rendering a failure
 
 | Situation | Component | Why |
