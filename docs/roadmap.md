@@ -92,7 +92,7 @@ hook. No page consumes these yet; the first real consumer is M8.
 |---|---|---|---|
 | 8 | Question input — autocomplete, history, clear | ✅ | `54b39df`, `b452fab` — `/query?q=…&top_k=10&retriever=dense` |
 | 9 | Streaming answer via `/stream` | ✅ | `7a929ea`, `e3484b9` |
-| 10 | Answer UI — answer, confidence, sources, latency | 🟡 | answer, latency and time-to-first-token render; confidence and per-source attribution do not |
+| 10 | Answer UI — answer, confidence, sources, latency | 🟡 | answer, latency, time-to-first-token and per-source attribution render; whether the model abstained does not — the API does not report it |
 
 M9 required a backend change: the SSE contract closed with a bare
 `{"type": "done"}`, so moving the UI onto `/stream` would have dropped the
@@ -117,7 +117,7 @@ its reranker toggle stays blocked on open decision 2.
 | # | Milestone | Status | Notes |
 |---|---|---|---|
 | 11 | Retrieved chunks — rank, similarity, source, chunk, metadata | ✅ | `b850d77` |
-| 12 | Pipeline visualisation (query → embedding → dense → sparse → fusion → reranker → LLM) | ⬜ | needs `PipelineStage` (spec §6.2), which is not built |
+| 12 | Pipeline visualisation (query → embedding → dense → sparse → fusion → reranker → LLM) | ✅ | `662ca3a`, `1b549ac` |
 
 **The M11 blocker is cleared.** `HybridRetriever` no longer discards component
 ranks: every result carries `scores` with `dense | sparse | fused | reranker`,
@@ -153,6 +153,29 @@ size.
 
 The reranker stays absent from every trace because it is not wired into the
 live path — open decision 2 below.
+
+### Milestone 12 — and why it is not a chart
+
+The stage list is produced by the backend rather than inferred by the frontend,
+because only the retriever knows what it chose to run: a sparse-only query
+embeds nothing, and no result set reveals that. Every stage is reported every
+time, skipped ones included, so a stage never disappears from the diagram.
+
+**The diagram deliberately contains no chart.** The design system's chart ramp
+is achromatic — `oklch(L 0 0)` for all five steps — and the palette validator
+fails it as a categorical palette on two counts: every step is below the chroma
+floor, and adjacent steps sit at ΔE 6.7 against a normal-vision floor of 15.
+Encoding six stage identities in shades that a full-colour reader cannot
+separate would be worse than no chart, and inventing hues would mean abandoning
+the design system. Identity is in labels, magnitude in numbers, and the finding
+in one sentence.
+
+**What it measured immediately.** On a live hybrid query: embedding 381 ms,
+dense search 2.6 ms, BM25 0.4 ms, fusion 0.05 ms, generation 603 ms. The
+embedding model's forward pass is 38% of end-to-end latency and roughly 99% of
+retrieval. The old single "retrieval" number could say retrieval was slow; it
+could not say why. If retrieval latency ever needs to come down, the answer is a
+smaller or cached embedding model, not a faster index.
 
 ## Phase 6 — Evaluation dashboard
 
@@ -228,19 +251,21 @@ These were raised before Milestone 2 and are still unanswered:
 
 ## Suggested next step
 
-**Milestone 12 — the pipeline visualisation**, which needs one backend piece
-first: `PipelineStage` from spec §6.2, carrying each stage's status, latency and
-candidate counts. Without it the diagram would have to guess which stages ran
-and how long they took, and the spec is explicit that it must never animate a
-stage that did not execute.
+**Grow the corpus.** Phase 5 is complete and Phase 6 is now the only unbuilt
+product surface, but all three of its milestones rest on a corpus that cannot
+support them. Four independent findings point the same way: MRR pinned at 1.00,
+BM25's IDF flooring to zero on a term in half the corpus, the hybrid-versus-dense
+disagreement being a single anecdote, and a 19-chunk index where dense search
+costs 2.6 ms — the index is not what makes retrieval slow, so growing it is
+close to free.
 
-Alternatively **grow the corpus**, which is the prerequisite for the whole of
-Phase 6. Three separate findings now point at it: MRR pinned at 1.00, BM25's IDF
-flooring to zero on a term in half the corpus, and the hybrid-versus-dense
-result above being a single anecdote rather than a measurement.
+That is a decision for you, not a task I should pick: it means choosing a
+document set and writing labelled questions for it, and open decisions 1 and 3
+are the same question.
 
-M10's remaining half — whether the model abstained for lack of grounding — is
-small and independent of both.
+Cheaper and independent: **M10's remaining half**, whether the model abstained
+for lack of grounding. It needs the generator to report abstention rather than
+the UI guessing from the answer text.
 
 ---
 
