@@ -90,9 +90,17 @@ hook. No page consumes these yet; the first real consumer is M8.
 
 | # | Milestone | Status | Notes |
 |---|---|---|---|
-| 8 | Question input — autocomplete, history, clear | ⬜ | settings (top-K, retriever, reranker) belong in the URL, not component state, so a result stays reproducible and shareable: `/query?q=…&top_k=10&retriever=hybrid` |
+| 8 | Question input — autocomplete, history, clear | ✅ | `54b39df` — `/query?q=…&top_k=10`; **no `retriever` param, see below** |
 | 9 | Streaming answer via `/stream` | ⬜ | `streamQuery` is implemented and tested (including SSE frames split mid-JSON across chunk boundaries) but **no page consumes it** |
-| 10 | Answer UI — answer, confidence, sources, latency | ⬜ | |
+| 10 | Answer UI — answer, confidence, sources, latency | 🟡 | the answer and total latency render; confidence and per-source attribution do not |
+
+**A third blocker, found while building M8.** The settings placeholder promised
+`/query?q=…&top_k=10&retriever=hybrid`, but **`retriever` is not a request
+parameter**. `HybridRetriever` is constructed once at startup in
+`api/dependencies.py` and `RAGService.answer()` takes only `(question, top_k)`,
+so choosing a retriever per request needs the same kind of contract change M11
+is waiting on. M8 therefore ships `q` and `top_k` only, and the settings page
+still describes a control that cannot exist yet.
 
 ## Phase 5 — Retrieval visualisation
 
@@ -184,13 +192,16 @@ These were raised before Milestone 2 and are still unanswered:
 
 ## Suggested next step
 
-**Milestone 8 — the question input.** Phase 2 and 3 are now complete, so the
-query page has real loading, error and empty primitives to build on rather than
-inventing them inline, and `postQuery` has been sitting implemented and tested
-since M6 with no consumer.
+**Milestone 9 — streaming.** `streamQuery` has been implemented and tested since
+M6 with no consumer, and the query page now has somewhere to put the tokens. It
+is a contained change: the same URL state, a different transport.
 
-M11 and M15 should not be attempted before their blockers clear — the backend
-score contract and the corpus, respectively.
+Alternatively **the backend score contract**, which is the single change that
+unblocks the most: per-retriever scores would clear M11, a per-request retriever
+would let the settings page keep its promise, and both are the same edit to
+`RAGService.answer()` and `HybridRetriever`.
+
+M15 stays blocked on the corpus regardless.
 
 ---
 

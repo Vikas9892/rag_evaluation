@@ -167,6 +167,25 @@ Classification reads `signal.aborted` and `signal.reason` rather than sniffing t
 exception: Node and browsers disagree on whether an aborted fetch throws `TimeoutError`,
 `AbortError`, or a `TypeError` wrapping either, but the signal's state is specified.
 
+## Query state lives in the URL
+
+`/query?q=…&top_k=…` is the source of truth for the question and its retrieval
+settings, so an answer can be linked to and reproduced. The input holds a draft seeded
+from the URL; submitting pushes (Back returns to the previous question) and changing a
+setting replaces (Back should not walk through every intermediate top-K).
+
+`top_k` is parsed defensively — the address bar is untrusted input — and clamped to the
+bounds `QueryRequest` declares, so a mistyped URL becomes a sane value rather than a 422.
+Those bounds exist in two languages; `tests/test_api_contract.py` fails if they drift.
+
+This makes `useRagQuery` a **query, not the mutation sketched above**: with the URL owning
+the question, a mutation would need an effect firing a request on mount to honour a shared
+link. Keying on `[question, topK]` gets it declaratively, and the cache stops an identical
+question spending Groq budget twice.
+
+Reading `useSearchParams` opts the subtree out of static rendering, so the page wraps it in
+`<Suspense>`; the shell prerenders and the panel hydrates.
+
 ## Rendering a failure
 
 | Situation | Component | Why |
