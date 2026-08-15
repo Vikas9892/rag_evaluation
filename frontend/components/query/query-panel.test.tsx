@@ -6,6 +6,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { QueryPanel } from "./query-panel";
 import { ApiError } from "@/services/api-error";
+import type { StreamEvent } from "@/types/api";
 
 const push = vi.fn();
 const replace = vi.fn();
@@ -17,22 +18,46 @@ vi.mock("next/navigation", () => ({
   useSearchParams: () => searchParams,
 }));
 
-const postQuery = vi.hoisted(() => vi.fn());
-vi.mock("@/services/api", () => ({ postQuery }));
+const streamQuery = vi.hoisted(() => vi.fn());
+vi.mock("@/services/api", () => ({ streamQuery }));
 
-const ANSWER = {
-  answer: "ACID is atomicity, consistency, isolation, durability.",
-  sources: [],
+const DONE = {
+  request_id: "3f8a1c20-d42b-4e7e-9b5f-abcdef012345",
   retrieval_latency_ms: 4.2,
   generation_latency_ms: 1183,
   total_latency_ms: 1187.2,
-  request_id: "3f8a1c20-d42b-4e7e-9b5f-abcdef012345",
+  first_token_latency_ms: 210.5,
 };
 
+const ANSWER = "ACID is atomicity, consistency, isolation, durability.";
+
+const FULL_STREAM: StreamEvent[] = [
+  {
+    type: "sources",
+    data: [{ document_id: "dbms.md", chunk_id: "dbms.md_0", score: 0.9 }],
+  },
+  { type: "token", data: "ACID is atomicity, " },
+  { type: "token", data: "consistency, isolation, durability." },
+  { type: "done", data: DONE },
+];
+
+/** Turns a fixed event list into the async generator streamQuery returns. */
+function emits(events: StreamEvent[]) {
+  return async function* () {
+    for (const event of events) yield event;
+  };
+}
+
+/** A stream that yields, then throws — the mid-generation failure case. */
+function emitsThenThrows(events: StreamEvent[], error: unknown) {
+  return async function* () {
+    for (const event of events) yield event;
+    throw error;
+  };
+}
+
 function renderPanel() {
-  const client = new QueryClient({
-    defaultOptions: { queries: { retry: false } },
-  });
+  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   const Wrapper = ({ children }: { children: ReactNode }) => (
     <QueryClientProvider client={client}>{children}</QueryClientProvider>
   );
@@ -42,7 +67,8 @@ function renderPanel() {
 beforeEach(() => {
   searchParams = new URLSearchParams();
   window.localStorage.clear();
-  postQuery.mockReset();
+  streamQuery.mockReset();
+  streamQuery.mockImplementation(emits(FULL_STREAM));
   push.mockReset();
   replace.mockReset();
 });
@@ -55,28 +81,161 @@ describe("QueryPanel", () => {
     renderPanel();
 
     expect(screen.getByText(/no question yet/i)).toBeInTheDocument();
-    expect(postQuery).not.toHaveBeenCalled();
+    expect(streamQuery).not.toHaveBeenCalled();
   });
 
   it("answers the question already in the URL, so a shared link works on arrival", async () => {
     searchParams = new URLSearchParams("?q=what+is+ACID");
-    postQuery.mockResolvedValue(ANSWER);
 
     renderPanel();
 
-    expect(await screen.findByText(ANSWER.answer)).toBeInTheDocument();
-    expect(postQuery).toHaveBeenCalledWith("what is ACID", 5, expect.anything());
+    expect(await screen.findByText(ANSWER)).toBeInTheDocument();
+    expect(streamQuery).toHaveBeenCalledWith("what is ACID", 5, expect.anything());
   });
 
   it("honours a non-default top_k from the URL", async () => {
     searchParams = new URLSearchParams("?q=hello&top_k=12");
-    postQuery.mockResolvedValue(ANSWER);
 
     renderPanel();
 
     await waitFor(() =>
-      expect(postQuery).toHaveBeenCalledWith("hello", 12, expect.anything()),
+      expect(streamQuery).toHaveBeenCalledWith("hello", 12, expect.anything()),
     );
+  });
+
+  describe("streaming", () => {
+    it("assembles the tokens into one answer", async () => {
+      searchParams = new URLSearchParams("?q=hello");
+      renderPanel();
+
+      // Neither token is a standalone text node once joined.
+      expect(await screen.findByText(ANSWER)).toBeInTheDocument();
+    });
+
+    it("shows text that has arrived before the stream finishes", async () => {
+      // The point of streaming: something readable before the answer is whole.
+      searchParams = new URLSearchParams("?q=hello");
+      let release!: () => void;
+      const gate = new Promise<void>((resolve) => {
+        release = resolve;
+      });
+      streamQuery.mockImplementation(async function* () {
+        yield { type: "token", data: "partial text" } as StreamEvent;
+        await gate;
+        yield { type: "done", data: DONE } as StreamEvent;
+      });
+
+      renderPanel();
+
+      expect(await screen.findByText("partial text")).toBeInTheDocument();
+      // Still mid-stream, so no closing metrics yet.
+      expect(screen.queryByText(/ms total/)).not.toBeInTheDocument();
+
+      release();
+      expect(await screen.findByText(/ms total/)).toBeInTheDocument();
+    });
+
+    it("reports latency and time to first token once complete", async () => {
+      searchParams = new URLSearchParams("?q=hello");
+      renderPanel();
+
+      const metrics = await screen.findByText(/ms total/);
+      expect(metrics).toHaveTextContent("1187 ms total");
+      expect(metrics).toHaveTextContent("211 ms to first token");
+      expect(metrics).toHaveTextContent("3f8a1c20");
+    });
+
+    it("omits time to first token when the model produced none", async () => {
+      searchParams = new URLSearchParams("?q=hello");
+      streamQuery.mockImplementation(
+        emits([{ type: "done", data: { ...DONE, first_token_latency_ms: null } }]),
+      );
+
+      renderPanel();
+
+      const metrics = await screen.findByText(/ms total/);
+      expect(metrics).not.toHaveTextContent("to first token");
+    });
+  });
+
+  describe("failure part-way through", () => {
+    it("keeps the partial answer and reports the failure beside it", async () => {
+      // Replacing what the user is reading with an error throws away the half
+      // that worked.
+      searchParams = new URLSearchParams("?q=hello");
+      streamQuery.mockImplementation(
+        emitsThenThrows(
+          [{ type: "token", data: "half an answer" }],
+          new ApiError("server", "upstream died"),
+        ),
+      );
+
+      renderPanel();
+
+      expect(await screen.findByRole("alert")).toBeInTheDocument();
+      expect(screen.getByText("half an answer")).toBeInTheDocument();
+    });
+
+    it("treats a server error event as a failure", async () => {
+      searchParams = new URLSearchParams("?q=hello");
+      streamQuery.mockImplementation(
+        emits([
+          { type: "token", data: "started" },
+          { type: "error", data: "Internal server error" },
+        ]),
+      );
+
+      renderPanel();
+
+      expect(await screen.findByRole("alert")).toBeInTheDocument();
+      expect(screen.getByText("started")).toBeInTheDocument();
+    });
+
+    it("does not present a truncated answer as a finished one", async () => {
+      // The connection ended without 'done'. Silently succeeding here would
+      // show half an answer with no indication it is half.
+      searchParams = new URLSearchParams("?q=hello");
+      streamQuery.mockImplementation(emits([{ type: "token", data: "cut off" }]));
+
+      renderPanel();
+
+      expect(await screen.findByRole("alert")).toBeInTheDocument();
+      expect(screen.getByText("cut off")).toBeInTheDocument();
+      expect(screen.queryByText(/ms total/)).not.toBeInTheDocument();
+    });
+
+    it("explains a 503 and offers no retry", async () => {
+      searchParams = new URLSearchParams("?q=hello");
+      streamQuery.mockImplementation(() => {
+        throw new ApiError("unavailable", "no index", {
+          status: 503,
+          detail: "FAISS index not built",
+        });
+      });
+
+      renderPanel();
+
+      expect(await screen.findByRole("alert")).toBeInTheDocument();
+      expect(screen.getByText(/FAISS index not built/)).toBeInTheDocument();
+      expect(
+        screen.queryByRole("button", { name: /try again/i }),
+      ).not.toBeInTheDocument();
+    });
+
+    it("offers a retry for a network failure and re-runs the request", async () => {
+      searchParams = new URLSearchParams("?q=hello");
+      streamQuery
+        .mockImplementationOnce(() => {
+          throw new ApiError("network", "offline");
+        })
+        .mockImplementationOnce(emits(FULL_STREAM));
+
+      renderPanel();
+
+      await userEvent.click(await screen.findByRole("button", { name: /try again/i }));
+
+      expect(await screen.findByText(ANSWER)).toBeInTheDocument();
+    });
   });
 
   describe("navigation", () => {
@@ -94,7 +253,6 @@ describe("QueryPanel", () => {
     it("replaces rather than pushes when a setting changes", async () => {
       // Pushing would make Back walk through every intermediate top-K value.
       searchParams = new URLSearchParams("?q=hello");
-      postQuery.mockResolvedValue(ANSWER);
       renderPanel();
 
       const topK = screen.getByLabelText(/chunks retrieved/i);
@@ -110,7 +268,6 @@ describe("QueryPanel", () => {
       // Each commit is a navigation, a refetch and a Groq call. Typing "12"
       // must not first ask the question with top_k=1.
       searchParams = new URLSearchParams("?q=hello");
-      postQuery.mockResolvedValue(ANSWER);
       renderPanel();
 
       const topK = screen.getByLabelText(/chunks retrieved/i);
@@ -126,7 +283,6 @@ describe("QueryPanel", () => {
 
     it("restores the current value when the box is left empty", async () => {
       searchParams = new URLSearchParams("?q=hello&top_k=7");
-      postQuery.mockResolvedValue(ANSWER);
       renderPanel();
 
       const topK = screen.getByLabelText(/chunks retrieved/i);
@@ -139,7 +295,6 @@ describe("QueryPanel", () => {
 
     it("clamps a typed value that exceeds what the API accepts", async () => {
       searchParams = new URLSearchParams("?q=hello");
-      postQuery.mockResolvedValue(ANSWER);
       renderPanel();
 
       const topK = screen.getByLabelText(/chunks retrieved/i);
@@ -160,49 +315,6 @@ describe("QueryPanel", () => {
       expect(window.localStorage.getItem("rag-eval.question-history.v1")).toContain(
         "remember me",
       );
-    });
-  });
-
-  describe("failure", () => {
-    it("explains a 503 and offers no retry", async () => {
-      searchParams = new URLSearchParams("?q=hello");
-      postQuery.mockRejectedValue(
-        new ApiError("unavailable", "no index", {
-          status: 503,
-          detail: "FAISS index not built",
-        }),
-      );
-
-      renderPanel();
-
-      expect(await screen.findByRole("alert")).toBeInTheDocument();
-      expect(screen.getByText(/FAISS index not built/)).toBeInTheDocument();
-      expect(
-        screen.queryByRole("button", { name: /try again/i }),
-      ).not.toBeInTheDocument();
-    });
-
-    it("offers a retry for a network failure and re-runs the request", async () => {
-      searchParams = new URLSearchParams("?q=hello");
-      postQuery.mockRejectedValueOnce(new ApiError("network", "offline"));
-      postQuery.mockResolvedValueOnce(ANSWER);
-
-      renderPanel();
-
-      await userEvent.click(await screen.findByRole("button", { name: /try again/i }));
-
-      expect(await screen.findByText(ANSWER.answer)).toBeInTheDocument();
-    });
-
-    it("shows the reason rather than a skeleton while retrying", async () => {
-      // isFetching goes true again during a retry; a skeleton would hide why
-      // the first attempt failed.
-      searchParams = new URLSearchParams("?q=hello");
-      postQuery.mockRejectedValue(new ApiError("timeout", "slow"));
-
-      renderPanel();
-
-      expect(await screen.findByRole("alert")).toBeInTheDocument();
     });
   });
 

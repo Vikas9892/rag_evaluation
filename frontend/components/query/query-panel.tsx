@@ -14,7 +14,8 @@ import { Field, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useQuestionHistory } from "@/hooks/use-question-history";
-import { useRagQuery } from "@/hooks/use-rag-query";
+import { useRagQuery, type RagAnswer } from "@/hooks/use-rag-query";
+import type { StreamDone } from "@/types/api";
 import {
   buildQueryString,
   parseQueryParams,
@@ -159,7 +160,7 @@ function Result({
   question: string;
   isFetching: boolean;
   error: unknown;
-  data?: { answer: string; total_latency_ms: number; request_id: string };
+  data?: RagAnswer;
   onRetry: () => void;
 }) {
   if (!question) {
@@ -172,12 +173,15 @@ function Result({
     );
   }
 
-  // Errors outrank the loading state: while react-query retries a failure,
-  // isFetching is true again, and showing a skeleton would hide the reason the
-  // first attempt failed.
-  if (error) return <ErrorState error={error} onRetry={onRetry} />;
+  const partial = data?.answer ?? "";
 
-  if (isFetching && !data) {
+  // A failure with nothing on screen is the whole story. A failure after tokens
+  // arrived is not: the user is mid-read, and replacing what they have with an
+  // error throws away the part that worked.
+  if (error && !partial) return <ErrorState error={error} onRetry={onRetry} />;
+
+  if (!partial && !data?.complete) {
+    if (!isFetching) return null;
     return (
       <Card aria-busy>
         <CardHeader>
@@ -185,7 +189,7 @@ function Result({
         </CardHeader>
         <CardContent className="space-y-2">
           {/* Shaped like the paragraph it is replacing, so nothing jumps when
-              the real answer arrives. */}
+              the first tokens arrive. */}
           <Skeleton className="h-4 w-full" />
           <Skeleton className="h-4 w-11/12" />
           <Skeleton className="h-4 w-4/5" />
@@ -194,7 +198,7 @@ function Result({
     );
   }
 
-  if (!data) return null;
+  const streaming = isFetching && !data?.complete && !error;
 
   return (
     <>
@@ -203,12 +207,31 @@ function Result({
           <CardTitle>Answer</CardTitle>
         </CardHeader>
         <CardContent className="space-y-3">
-          <p className="leading-relaxed whitespace-pre-wrap">{data.answer}</p>
-          <p className="text-muted-foreground text-xs">
-            {Math.round(data.total_latency_ms)} ms · request {data.request_id.slice(0, 8)}
+          {/*
+            aria-live is polite and on a container that exists from the start:
+            announcing every token would make the answer unreadable with a
+            screen reader, so the region is only read once it settles.
+          */}
+          <p
+            className="leading-relaxed whitespace-pre-wrap"
+            aria-live="polite"
+            aria-busy={streaming}
+          >
+            {partial}
+            {streaming ? (
+              <span
+                aria-hidden
+                className="bg-foreground ml-0.5 inline-block h-4 w-1.5 animate-pulse align-text-bottom"
+              />
+            ) : null}
           </p>
+
+          {data?.metrics ? <Metrics metrics={data.metrics} /> : null}
         </CardContent>
       </Card>
+
+      {/* Kept below the answer, not instead of it. */}
+      {error ? <ErrorState error={error} onRetry={onRetry} /> : null}
 
       <PendingPanel milestone="Milestones 10–11">
         Confidence, per-source attribution and the retrieval trace. The trace needs
@@ -216,5 +239,17 @@ function Result({
         dense and sparse into one number and discards the component ranks.
       </PendingPanel>
     </>
+  );
+}
+
+function Metrics({ metrics }: { metrics: StreamDone }) {
+  return (
+    <p className="text-muted-foreground text-xs">
+      {Math.round(metrics.total_latency_ms)} ms total
+      {metrics.first_token_latency_ms !== null
+        ? ` · ${Math.round(metrics.first_token_latency_ms)} ms to first token`
+        : null}{" "}
+      · request {metrics.request_id.slice(0, 8)}
+    </p>
   );
 }

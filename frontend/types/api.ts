@@ -20,8 +20,21 @@ export type SourceInfo = Schemas["SourceInfo"];
 export type StreamEvent =
   | { type: "sources"; data: StreamSource[] }
   | { type: "token"; data: string }
-  | { type: "done" }
+  | { type: "done"; data: StreamDone }
   | { type: "error"; data: string };
+
+/**
+ * The stream's closing payload: what POST /query returns in its body, plus
+ * time-to-first-token, which only the streaming path can measure.
+ */
+export interface StreamDone {
+  request_id: string;
+  retrieval_latency_ms: number;
+  generation_latency_ms: number;
+  total_latency_ms: number;
+  /** null when the model produced no tokens — not the same as arriving in 0 ms. */
+  first_token_latency_ms: number | null;
+}
 
 /**
  * Source metadata as it appears in the stream's first event.

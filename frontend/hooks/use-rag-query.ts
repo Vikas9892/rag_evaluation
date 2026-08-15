@@ -2,29 +2,89 @@
 
 import { useQuery } from "@tanstack/react-query";
 
-import { postQuery } from "@/services/api";
+import { streamQuery } from "@/services/api";
+import { ApiError } from "@/services/api-error";
+import type { StreamDone, StreamSource } from "@/types/api";
 
 /**
- * The answer for a question, keyed on the question and its retrieval settings.
+ * An answer as it accumulates, plus whatever the stream has told us so far.
  *
- * A query rather than the mutation ADR 008 sketched. The URL owns the question,
- * so a shared link must produce its answer on arrival; with a mutation that
- * means an effect firing a request on mount, which is the pattern react-query
- * exists to remove. Keying on `[question, topK]` gets it declaratively.
- *
- * Caching matters here beyond speed: every call spends Groq budget, so an
- * identical question answered a moment ago should not be paid for twice.
- * `enabled` keeps it from firing on an empty question — the state the page is
- * in before anything has been asked.
+ * `complete` is not derivable from having text: a stream that dies half way
+ * through also leaves text behind. Only the `done` event means the answer is
+ * whole, and presenting a truncated one as finished is the failure this flag
+ * exists to prevent.
  */
+export interface RagAnswer {
+  answer: string;
+  sources: StreamSource[];
+  complete: boolean;
+  metrics: StreamDone | null;
+}
+
+const EMPTY: RagAnswer = { answer: "", sources: [], complete: false, metrics: null };
+
 export function ragQueryKey(question: string, topK: number) {
   return ["rag-query", question, topK] as const;
 }
 
+/**
+ * Stream the answer for a question, keyed on the question and its settings.
+ *
+ * Still a react-query query, so Milestone 8's properties survive: a shared link
+ * produces its answer on arrival, and an identical question already answered is
+ * served from cache rather than paid for again. Partial answers are published
+ * through `setQueryData` as tokens arrive, which is how a single cache entry can
+ * also be a live one.
+ *
+ * The signal comes from react-query, so navigating away aborts the request
+ * mid-stream instead of leaving the connection reading into a dead component.
+ */
 export function useRagQuery(question: string, topK: number) {
-  return useQuery({
+  return useQuery<RagAnswer>({
     queryKey: ragQueryKey(question, topK),
-    queryFn: ({ signal }) => postQuery(question, topK, signal),
+    queryFn: async ({ signal, client, queryKey }) => {
+      let current: RagAnswer = EMPTY;
+
+      const publish = (next: Partial<RagAnswer>) => {
+        current = { ...current, ...next };
+        // Makes the in-flight answer visible without waiting for the promise to
+        // settle. react-query replaces this with the returned value at the end.
+        client.setQueryData(queryKey, current);
+      };
+
+      publish({});
+
+      for await (const event of streamQuery(question, topK, signal)) {
+        switch (event.type) {
+          case "sources":
+            publish({ sources: event.data });
+            break;
+          case "token":
+            publish({ answer: current.answer + event.data });
+            break;
+          case "done":
+            publish({ complete: true, metrics: event.data });
+            break;
+          case "error":
+            // The server reports a failure it hit part-way through. Throwing
+            // keeps the tokens already published — react-query holds the last
+            // data alongside the error — so the user keeps a partial answer and
+            // is told why it stopped.
+            throw new ApiError("server", event.data, { detail: event.data });
+        }
+      }
+
+      if (!current.complete) {
+        // The connection ended without a 'done'. Something truncated it, and
+        // silently treating that as success would present half an answer as
+        // the whole one.
+        throw new ApiError("parse", "The answer stream ended before it finished", {
+          detail: "The connection closed before the answer was complete.",
+        });
+      }
+
+      return current;
+    },
     enabled: question.trim().length > 0,
     // An answer for a given question and top-K does not change unless the index
     // is rebuilt, so re-asking within a session should be free.
