@@ -74,8 +74,11 @@ export function QueryPanel() {
         <div className="flex flex-wrap items-center gap-4">
           <TopKField value={topK} onCommit={(next) => changeSetting({ topK: next })} />
 
-          <Field className="flex-row items-center gap-2">
-            <FieldLabel htmlFor="retriever" className="text-muted-foreground text-sm">
+          <Field className="w-auto flex-row items-center gap-2">
+            <FieldLabel
+              htmlFor="retriever"
+              className="text-muted-foreground text-sm whitespace-nowrap"
+            >
               Retriever
             </FieldLabel>
             <NativeSelect
@@ -84,7 +87,7 @@ export function QueryPanel() {
               onChange={(event) =>
                 changeSetting({ retriever: event.target.value as RetrieverMode })
               }
-              className="w-32"
+              className="w-32 shrink-0"
             >
               {RETRIEVERS.map((option) => (
                 <option key={option} value={option}>
@@ -153,8 +156,11 @@ function TopKField({
   }
 
   return (
-    <Field className="flex-row items-center gap-2">
-      <FieldLabel htmlFor="top-k" className="text-muted-foreground text-sm">
+    <Field className="w-auto flex-row items-center gap-2">
+      <FieldLabel
+        htmlFor="top-k"
+        className="text-muted-foreground text-sm whitespace-nowrap"
+      >
         Chunks retrieved
       </FieldLabel>
       <Input
@@ -278,11 +284,20 @@ function Result({
         </Card>
       ) : null}
 
-      <PendingPanel milestone="Milestones 10 and 12">
-        Whether the model abstained for lack of grounding, and the pipeline diagram. The
-        diagram needs per-stage timings the API does not report yet —{" "}
-        <code>PipelineStage</code> in the product spec — so it would have to guess which
-        stages ran and how long they took.
+      {data?.metrics?.pipeline?.length ? (
+        <Card>
+          <CardHeader>
+            <CardTitle>Pipeline</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <PipelineDiagram stages={data.metrics.pipeline} />
+          </CardContent>
+        </Card>
+      ) : null}
+
+      <PendingPanel milestone="Milestone 10">
+        Whether the model abstained for lack of grounding. The API does not report it, and
+        inferring it from the answer text would be guesswork dressed as a measurement.
       </PendingPanel>
     </>
   );

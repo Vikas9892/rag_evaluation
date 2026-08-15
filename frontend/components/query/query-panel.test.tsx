@@ -211,6 +211,36 @@ describe("QueryPanel", () => {
     });
   });
 
+  describe("what it renders alongside the answer", () => {
+    it("shows the retrieval table", async () => {
+      searchParams = new URLSearchParams("?q=hello");
+      renderPanel();
+
+      expect(await screen.findByRole("table")).toBeInTheDocument();
+      expect(screen.getByRole("columnheader", { name: "Dense" })).toBeInTheDocument();
+    });
+
+    it("shows the pipeline diagram", async () => {
+      // The component had its own tests and still never reached the page: the
+      // wiring was imported and never rendered, and nothing here noticed.
+      searchParams = new URLSearchParams("?q=hello");
+      renderPanel();
+
+      expect(await screen.findByText("Pipeline")).toBeInTheDocument();
+      expect(screen.getByText("Embedding")).toBeInTheDocument();
+      expect(screen.getByText("did not run")).toBeInTheDocument();
+    });
+
+    it("does not claim the pipeline before the stream reports it", async () => {
+      searchParams = new URLSearchParams("?q=hello");
+      streamQuery.mockImplementation(emits([{ type: "token", data: "partial" }]));
+      renderPanel();
+
+      await screen.findByText("partial");
+      expect(screen.queryByText("Pipeline")).not.toBeInTheDocument();
+    });
+  });
+
   describe("failure part-way through", () => {
     it("keeps the partial answer and reports the failure beside it", async () => {
       // Replacing what the user is reading with an error throws away the half
