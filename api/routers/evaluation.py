@@ -102,6 +102,20 @@ def _evaluate(
     return evaluator.evaluate(dataset)
 
 
+def _metrics_from(aggregate) -> RetrievalMetrics:
+    """One construction site, so a new metric cannot reach /evaluation and
+    silently miss /benchmarks."""
+    return RetrievalMetrics(
+        precision_at_k=round(aggregate.precision_at_k, 4),
+        recall_at_k=round(aggregate.recall_at_k, 4),
+        hit_rate=round(aggregate.hit_rate, 4),
+        mrr=round(aggregate.mrr, 4),
+        avg_latency_ms=round(aggregate.avg_latency_ms, 1),
+        p50_latency_ms=round(aggregate.p50_latency_ms, 1),
+        p95_latency_ms=round(aggregate.p95_latency_ms, 1),
+    )
+
+
 @router.get(
     "/evaluation",
     response_model=EvaluationResponse,
@@ -139,13 +153,7 @@ async def evaluation(
         reranker=reranker,
         dataset_size=len(samples),
         cached=cached,
-        metrics=RetrievalMetrics(
-            precision_at_k=round(aggregate.precision_at_k, 4),
-            recall_at_k=round(aggregate.recall_at_k, 4),
-            hit_rate=round(aggregate.hit_rate, 4),
-            mrr=round(aggregate.mrr, 4),
-            avg_latency_ms=round(aggregate.avg_latency_ms, 1),
-        ),
+        metrics=_metrics_from(aggregate),
         questions=[
             PerQuestionResult(
                 id=s.question_id,
@@ -200,13 +208,7 @@ async def benchmarks(service: RAGService = Depends(get_service)) -> BenchmarkRes
                         retriever=retriever,
                         top_k=k,
                         reranker=rerank,
-                        metrics=RetrievalMetrics(
-                            precision_at_k=round(aggregate.precision_at_k, 4),
-                            recall_at_k=round(aggregate.recall_at_k, 4),
-                            hit_rate=round(aggregate.hit_rate, 4),
-                            mrr=round(aggregate.mrr, 4),
-                            avg_latency_ms=round(aggregate.avg_latency_ms, 1),
-                        ),
+                        metrics=_metrics_from(aggregate),
                     )
                 )
 

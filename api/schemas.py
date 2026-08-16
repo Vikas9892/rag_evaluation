@@ -271,6 +271,14 @@ class RetrievalMetrics(BaseModel):
     hit_rate: float = Field(description="Questions with at least one relevant chunk retrieved")
     mrr: float = Field(description="Mean reciprocal rank of the first relevant chunk")
     avg_latency_ms: float = Field(description="Mean retrieval latency across the dataset")
+    p50_latency_ms: float = Field(
+        default=0.0, description="Median retrieval latency across the dataset"
+    )
+    p95_latency_ms: float = Field(
+        default=0.0,
+        description="95th-percentile retrieval latency. The mean hides the tail, "
+        "and the tail is what a waiting user experiences.",
+    )
 
 
 class PerQuestionResult(BaseModel):

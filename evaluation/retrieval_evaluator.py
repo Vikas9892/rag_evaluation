@@ -1,3 +1,4 @@
+import math
 import time
 from dataclasses import dataclass
 from typing import List
@@ -32,6 +33,12 @@ class RetrievalAggregateResult:
     mrr: float
     avg_latency_ms: float
     k: int
+    #: Median and 95th percentile of the same per-question latencies the mean
+    #: comes from. The mean alone hides the tail, and the tail is what a user
+    #: waiting on a query actually experiences: one 900 ms outlier moves the
+    #: mean by a few milliseconds and p95 by hundreds.
+    p50_latency_ms: float = 0.0
+    p95_latency_ms: float = 0.0
 
 
 class RetrievalEvaluator:
@@ -90,11 +97,31 @@ class RetrievalEvaluator:
         if not results:
             return RetrievalAggregateResult(0.0, 0.0, 0.0, 0.0, 0.0, self.top_k)
         n = len(results)
+        latencies = [r.latency_ms for r in results]
         return RetrievalAggregateResult(
             precision_at_k=sum(r.precision for r in results) / n,
             recall_at_k=sum(r.recall for r in results) / n,
             hit_rate=sum(1 for r in results if r.hit) / n,
             mrr=mean_reciprocal_rank([r.reciprocal_rank for r in results]),
-            avg_latency_ms=sum(r.latency_ms for r in results) / n,
+            avg_latency_ms=sum(latencies) / n,
             k=self.top_k,
+            p50_latency_ms=percentile(latencies, 50),
+            p95_latency_ms=percentile(latencies, 95),
         )
+
+
+def percentile(values: List[float], q: float) -> float:
+    """The q-th percentile by nearest rank.
+
+    Nearest rank rather than interpolation: every value returned is a latency
+    that was actually measured, so "p95 = 412 ms" names a real question that
+    took that long. Interpolating would invent a number between two samples,
+    which is defensible for a continuous distribution and misleading for a
+    dataset of 53 discrete measurements.
+    """
+    if not values:
+        return 0.0
+    ordered = sorted(values)
+    # ceil(q/100 * n), clamped — index 0 for the smallest, n-1 for the largest.
+    rank = math.ceil(q / 100 * len(ordered))
+    return ordered[min(max(rank, 1), len(ordered)) - 1]

@@ -23,7 +23,11 @@ from evaluation.metrics import (
     recall_at_k,
     reciprocal_rank,
 )
-from evaluation.retrieval_evaluator import RetrievalEvaluator
+from evaluation.retrieval_evaluator import (
+    RetrievalEvaluator,
+    RetrievalSampleResult,
+    percentile,
+)
 from evaluation.generation_evaluator import GenerationEvaluator
 from evaluation.benchmark import BenchmarkResult, BenchmarkRunner
 from evaluation.report import ReportGenerator
@@ -525,3 +529,73 @@ class TestReportGenerator:
         rows = [{"chunk_size": 256, "precision_at_5": 0.8}, {"chunk_size": 512, "precision_at_5": 0.9}]
         path = rg.save_experiment_csv(rows)
         assert path.exists()
+
+
+class TestPercentile:
+    """Latency percentiles, by nearest rank.
+
+    Every value returned is a latency that was actually measured, so "p95 =
+    412 ms" names a real question that took that long rather than a number
+    interpolated between two samples.
+    """
+
+    def test_median_of_an_odd_count_is_the_middle_value(self):
+        assert percentile([3.0, 1.0, 2.0], 50) == 2.0
+
+    def test_the_result_is_always_a_measured_value(self):
+        values = [1.0, 2.0, 3.0, 4.0]
+        assert percentile(values, 50) in values
+        assert percentile(values, 95) in values
+
+    def test_p95_is_the_tail_not_the_mean(self):
+        # 49 fast questions and one slow one. The mean barely moves; p95 must.
+        values = [10.0] * 49 + [900.0]
+        assert percentile(values, 95) == 10.0
+        assert percentile(values, 100) == 900.0
+
+    def test_p100_is_the_slowest(self):
+        assert percentile([5.0, 40.0, 12.0], 100) == 40.0
+
+    def test_a_single_sample_is_every_percentile(self):
+        assert percentile([7.5], 50) == 7.5
+        assert percentile([7.5], 95) == 7.5
+
+    def test_no_samples_is_zero_rather_than_an_error(self):
+        # An empty dataset is a configuration problem, not a crash in a metric.
+        assert percentile([], 95) == 0.0
+
+    def test_order_of_the_input_does_not_matter(self):
+        assert percentile([9.0, 1.0, 5.0], 50) == percentile([1.0, 5.0, 9.0], 50)
+
+
+class TestAggregateLatencies:
+    def _results(self, latencies):
+        return [
+            RetrievalSampleResult(
+                question_id=i,
+                question=f"q{i}",
+                retrieved_ids=["c1"],
+                expected_ids=["c1"],
+                precision=1.0,
+                recall=1.0,
+                hit=True,
+                reciprocal_rank=1.0,
+                latency_ms=value,
+            )
+            for i, value in enumerate(latencies)
+        ]
+
+    def test_percentiles_come_from_the_same_samples_as_the_mean(self):
+        evaluator = RetrievalEvaluator(retriever=None, top_k=5)
+        latencies = [10.0] * 19 + [500.0]
+
+        aggregate = evaluator._aggregate(self._results(latencies))
+
+        assert aggregate.avg_latency_ms == sum(latencies) / len(latencies)
+        assert aggregate.p50_latency_ms == 10.0
+        assert aggregate.p95_latency_ms == 10.0
+
+    def test_an_empty_dataset_reports_zero_rather_than_dividing_by_zero(self):
+        aggregate = RetrievalEvaluator(retriever=None, top_k=5)._aggregate([])
+        assert aggregate.p50_latency_ms == 0.0
+        assert aggregate.p95_latency_ms == 0.0

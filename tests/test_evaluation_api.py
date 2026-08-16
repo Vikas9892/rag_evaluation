@@ -128,8 +128,26 @@ class TestEvaluation:
             "hit_rate",
             "mrr",
             "avg_latency_ms",
+            "p50_latency_ms",
+            "p95_latency_ms",
         }
         assert len(body["questions"]) == body["dataset_size"]
+
+    def test_reports_the_latency_tail_alongside_the_mean(self, client):
+        metrics = client.get("/evaluation").json()["metrics"]
+
+        # The mean alone hides the tail, and the tail is what a waiting user
+        # meets. p95 can equal p50 on a flat distribution, never precede it.
+        assert metrics["p95_latency_ms"] >= metrics["p50_latency_ms"]
+
+    def test_the_same_metrics_reach_benchmarks(self, client):
+        # Both endpoints build RetrievalMetrics from the same helper, so a new
+        # metric cannot land on one and silently miss the other.
+        evaluation = set(client.get("/evaluation").json()["metrics"])
+        cells = client.get("/benchmarks").json()["cells"]
+
+        assert cells, "no benchmark cells to check"
+        assert set(cells[0]["metrics"]) == evaluation
 
     def test_honours_the_requested_retriever(self, client, service):
         client.get("/evaluation?retriever=sparse")
