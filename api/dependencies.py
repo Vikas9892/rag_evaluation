@@ -24,21 +24,38 @@ logger = get_logger(__name__)
 
 
 @lru_cache(maxsize=8)
-def _build_service_for(corpus_id: str) -> RAGService:
-    """One service per corpus, built once and kept.
+def _build_retriever_for(corpus_id: str) -> HybridRetriever:
+    """One retriever per corpus, built once and kept.
 
     Cached because loading an index and its BM25 store costs real time, and a
     query should not pay it. The bound is small on purpose: each entry holds a
     corpus in memory, so an unbounded cache would grow with every corpus ever
     queried.
 
+    Separate from the service because retrieval is the half that works without
+    a generation backend: measuring retrieval quality makes no LLM call, and
+    an endpoint that makes no LLM call must not require an LLM to be reachable.
+    """
+    logger.info("Loading retriever for corpus %r...", corpus_id)
+    retriever = HybridRetriever.from_corpus(corpus_id)
+    logger.info("Retriever ready for corpus %r", corpus_id)
+    return retriever
+
+
+@lru_cache(maxsize=8)
+def _build_service_for(corpus_id: str) -> RAGService:
+    """Retrieval plus generation, for the endpoints that answer questions.
+
+    Built on the cached retriever rather than its own, so a corpus queried and
+    evaluated in the same process holds one FAISS index, not two.
+
     The generator and prompt builder are per-service but stateless; the
     expensive part is the retriever.
     """
-    logger.info("Loading RAG pipeline for corpus %r...", corpus_id)
-    retriever = HybridRetriever.from_corpus(corpus_id)
     service = RAGService(
-        retriever=retriever, generator=GroqGenerator(), builder=PromptBuilder()
+        retriever=_build_retriever_for(corpus_id),
+        generator=GroqGenerator(),
+        builder=PromptBuilder(),
     )
     logger.info("RAG pipeline ready for corpus %r", corpus_id)
     return service
@@ -80,6 +97,42 @@ def get_service_for_corpus(corpus_id: str) -> RAGService:
         raise HTTPException(status_code=503, detail=str(exc))
 
 
+def get_retriever_for_corpus(corpus_id: str) -> HybridRetriever:
+    """Retrieval alone, with the same failure translation minus the generator.
+
+    What `/evaluation`, `/benchmarks` and `/config` need. They used to ask for a
+    RAGService and reach through it for `.retriever`, which meant a deployment
+    with no GROQ_API_KEY answered 503 from three endpoints that make no LLM
+    call — `/evaluation` said so in its own description while doing the
+    opposite.
+    """
+    if not is_valid_corpus_id(corpus_id):
+        raise HTTPException(
+            status_code=422,
+            detail=(
+                "Invalid corpus id: use lowercase letters, digits, '-' or '_', "
+                "starting with a letter or digit."
+            ),
+        )
+    try:
+        return _build_retriever_for(corpus_id)
+    except CorpusNotFoundError:
+        raise HTTPException(
+            status_code=404,
+            detail=(
+                f"Corpus {corpus_id!r} has no index yet. Upload a document and wait "
+                "for it to report READY."
+            ),
+        )
+    except FileNotFoundError as exc:
+        raise HTTPException(status_code=503, detail=f"Index not available: {exc}")
+
+
+def get_retriever() -> HybridRetriever:
+    """The evaluation corpus's retriever — a FastAPI dependency."""
+    return get_retriever_for_corpus(DEFAULT_CORPUS_ID)
+
+
 def get_service_resolver() -> Callable[[str], RAGService]:
     """Injected so the corpus can be chosen from the request body.
 
@@ -96,8 +149,14 @@ def invalidate_service_cache(corpus_id: str | None = None) -> None:
     Called after indexing. Without it a corpus queried before its first upload
     finished would keep serving the retriever it loaded then, and the new
     document would appear to have vanished.
+
+    Both caches, in this order. The service holds the retriever it was built
+    with, so clearing only the retriever would leave a cached service still
+    pointing at the stale index — the bug this function exists to prevent,
+    reintroduced one level down.
     """
     _build_service_for.cache_clear()
+    _build_retriever_for.cache_clear()
 
 
 @lru_cache(maxsize=1)

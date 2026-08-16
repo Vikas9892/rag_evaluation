@@ -11,7 +11,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from api.app import create_app
-from api.dependencies import get_service
+from api.dependencies import get_retriever, get_service
 from api.routers import evaluation as evaluation_router
 from chunking.chunk import Chunk
 from retrieval.ranking import RetrievalResult
@@ -28,10 +28,20 @@ def _chunk(cid: str) -> Chunk:
 
 
 class StubRetriever:
-    """Returns the expected chunk first for odd questions, last for even ones."""
+    """Returns the expected chunk first for odd questions, last for even ones.
+
+    Also answers `corpus_size` and `document_count`, because /config asks the
+    retriever for them rather than going through a service it does not need.
+    """
 
     def __init__(self) -> None:
         self.calls: List[dict] = []
+
+    def corpus_size(self) -> int:
+        return 19
+
+    def document_count(self) -> int:
+        return 3
 
     def retrieve(
         self, question: str, top_k: int, mode: str = "hybrid", reranker: bool = False
@@ -85,6 +95,9 @@ def service() -> StubService:
 def client(service: StubService) -> TestClient:
     app = create_app()
     app.dependency_overrides[get_service] = lambda: service
+    # /config, /evaluation and /benchmarks resolve a retriever, not a service:
+    # none of them calls the LLM, so none of them should need one to exist.
+    app.dependency_overrides[get_retriever] = lambda: service.retriever
     with TestClient(app) as c:
         yield c
 
@@ -133,6 +146,23 @@ class TestDeepHealth:
 
         assert key["status"] == "warn"
         assert body["status"] == "degraded"
+
+    @pytest.mark.parametrize(
+        "path", ["/config", "/evaluation", "/benchmarks", "/settings"]
+    )
+    def test_the_retrieval_surfaces_answer_without_a_key(
+        self, client, monkeypatch, path
+    ):
+        """The claim the test above only asserted about /health/deep.
+
+        These endpoints make no LLM call — /evaluation says so in its own
+        description — but each resolved a RAGService, which constructs the Groq
+        client, so all of them returned 503 on a deployment without a key. The
+        whole Evaluation Lab was unreachable for anyone who had not signed up
+        for Groq, to read numbers produced entirely by retrieval.
+        """
+        monkeypatch.delenv("GROQ_API_KEY", raising=False)
+        assert client.get(path).status_code == 200
 
     def test_the_shallow_probe_stays_cheap(self, client, monkeypatch):
         # A load-balancer probe must not start failing because a downstream key

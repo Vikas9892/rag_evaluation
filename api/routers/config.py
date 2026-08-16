@@ -10,7 +10,7 @@ import shutil
 
 from fastapi import APIRouter, Depends
 
-from api.dependencies import get_service
+from api.dependencies import get_retriever
 from api.schemas import (
     ConfigResponse,
     DeepHealthResponse,
@@ -32,8 +32,8 @@ from config.settings import (
     MIN_CHUNK_CHARS,
     TOP_K,
 )
+from retrieval.hybrid_retriever import HybridRetriever
 from retrieval.ranking import RetrieverMode
-from services.rag_service import RAGService
 
 logger = get_logger(__name__)
 router = APIRouter(tags=["ops"])
@@ -52,7 +52,9 @@ _DISK_WARNING_BYTES = 100 * 1024 * 1024
     ),
     responses={503: {"description": "Pipeline not available"}},
 )
-async def config(service: RAGService = Depends(get_service)) -> ConfigResponse:
+async def config(
+    corpus_retriever: HybridRetriever = Depends(get_retriever),
+) -> ConfigResponse:
     return ConfigResponse(
         embedding_model=EMBEDDING_MODEL,
         llm_model=LLM_MODEL,
@@ -64,8 +66,8 @@ async def config(service: RAGService = Depends(get_service)) -> ConfigResponse:
         default_top_k=TOP_K,
         max_context_chunks=MAX_CONTEXT_CHUNKS,
         retrievers=list(RetrieverMode.__args__),
-        indexed_chunks=service.corpus_size(),
-        documents=service.document_count(),
+        indexed_chunks=corpus_retriever.corpus_size(),
+        documents=corpus_retriever.document_count(),
         # Available per request, off by default: it lifts MRR but costs
         # hundreds of milliseconds against a 300-600 ms generation step.
         reranker_enabled=False,

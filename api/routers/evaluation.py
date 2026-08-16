@@ -16,7 +16,8 @@ from typing import Dict, List, Tuple
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 
-from api.dependencies import get_service
+from api.dependencies import get_retriever
+from corpora import DEFAULT_CORPUS_ID
 from api.schemas import (
     BenchmarkCell,
     BenchmarkResponse,
@@ -30,7 +31,7 @@ from evaluation.dataset import DatasetLoader
 from evaluation.ground_truth import ChunkResolver
 from evaluation.retrieval_evaluator import RetrievalEvaluator
 from retrieval.ranking import RetrieverMode
-from services.rag_service import RAGService
+from retrieval.hybrid_retriever import HybridRetriever
 
 logger = get_logger(__name__)
 router = APIRouter(tags=["evaluation"])
@@ -54,11 +55,16 @@ _BENCHMARK_RERANKER: Tuple[bool, ...] = (False, True)
 _BENCHMARK_BUDGET_SECONDS = float(os.environ.get("BENCHMARK_BUDGET_SECONDS", "20"))
 
 # An evaluation run embeds every question in the dataset, so the same request
-# twice would pay the same ~2 s twice. Results are pure functions of (dataset,
-# index, config), none of which change while the process is up, so caching them
-# in memory is sound. Redis was the plan; it would add a service to operate for
-# a cache that a single process can hold, and the moment this runs on more than
-# one process the index would have to be shared too.
+# twice would pay the same ~2 s twice. Results are a pure function of (dataset,
+# index, config), and the benchmark corpus is built offline — uploads into it
+# are refused, precisely so a published number cannot move underneath a cached
+# one. That is what makes this cache sound, not the process being short-lived:
+# every *other* corpus is re-indexed at runtime. The corpus id is therefore part
+# of the key, so this stays correct if evaluation is ever pointed at one of them.
+#
+# Redis was the plan; it would add a service to operate for a cache that a
+# single process can hold, and the moment this runs on more than one process the
+# index would have to be shared too.
 _cache: Dict[tuple, object] = {}
 _cache_lock = Lock()
 
@@ -81,7 +87,10 @@ def _load_dataset():
 
 
 def _evaluate(
-    service: RAGService, top_k: int, retriever: RetrieverMode, reranker: bool = False
+    corpus_retriever: HybridRetriever,
+    top_k: int,
+    retriever: RetrieverMode,
+    reranker: bool = False,
 ):
     """Retrieval metrics for one configuration."""
 
@@ -98,7 +107,7 @@ def _evaluate(
                 question, top_k=top_k, mode=retriever, reranker=reranker
             )
 
-    evaluator = RetrievalEvaluator(_Bound(service.retriever), top_k=top_k)
+    evaluator = RetrievalEvaluator(_Bound(corpus_retriever), top_k=top_k)
     return evaluator.evaluate(dataset)
 
 
@@ -130,12 +139,12 @@ async def evaluation(
     top_k: int = Query(default=TOP_K, ge=1, le=20),
     retriever: RetrieverMode = Query(default="hybrid"),
     reranker: bool = Query(default=False),
-    service: RAGService = Depends(get_service),
+    corpus_retriever: HybridRetriever = Depends(get_retriever),
 ) -> EvaluationResponse:
     t0 = time.perf_counter()
     (samples, aggregate), cached = _cached(
-        ("eval", top_k, retriever, reranker),
-        lambda: _evaluate(service, top_k, retriever, reranker),
+        (DEFAULT_CORPUS_ID, top_k, retriever, reranker),
+        lambda: _evaluate(corpus_retriever, top_k, retriever, reranker),
     )
     elapsed = (time.perf_counter() - t0) * 1000
 
@@ -181,7 +190,9 @@ async def evaluation(
     ),
     responses={503: {"description": "Index or dataset not available"}},
 )
-async def benchmarks(service: RAGService = Depends(get_service)) -> BenchmarkResponse:
+async def benchmarks(
+    corpus_retriever: HybridRetriever = Depends(get_retriever),
+) -> BenchmarkResponse:
     cells: List[BenchmarkCell] = []
     pending = 0
     deadline = time.monotonic() + _BENCHMARK_BUDGET_SECONDS
@@ -189,7 +200,7 @@ async def benchmarks(service: RAGService = Depends(get_service)) -> BenchmarkRes
     for retriever in _BENCHMARK_RETRIEVERS:
         for k in _BENCHMARK_TOP_K:
             for rerank in _BENCHMARK_RERANKER:
-                key = ("eval", k, retriever, rerank)
+                key = (DEFAULT_CORPUS_ID, k, retriever, rerank)
                 with _cache_lock:
                     already = key in _cache
 
@@ -201,7 +212,9 @@ async def benchmarks(service: RAGService = Depends(get_service)) -> BenchmarkRes
 
                 (samples, aggregate), _ = _cached(
                     key,
-                    lambda r=retriever, kk=k, rr=rerank: _evaluate(service, kk, r, rr),
+                    lambda r=retriever, kk=k, rr=rerank: _evaluate(
+                        corpus_retriever, kk, r, rr
+                    ),
                 )
                 cells.append(
                     BenchmarkCell(
