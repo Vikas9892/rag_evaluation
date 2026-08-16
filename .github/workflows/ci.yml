@@ -26,8 +26,11 @@ jobs:
         with:
           python-version: "3.12"
 
+      # Pinned: black's stable style changes with the calendar year, and ruff
+      # adds rules between releases. An unpinned install turns "someone else
+      # shipped a new version" into a red build on an untouched tree.
       - name: Install the linters
-        run: pip install ruff black
+        run: pip install ruff==0.15.20 black==26.5.1
 
       - name: Ruff
         run: python -m ruff check .
