@@ -18,7 +18,7 @@ from chunking.config import DEFAULT_CHUNKING, ChunkingConfig, InvalidChunkingCon
 from chunking.splitter import DocumentSplitter
 from config.logging_config import get_logger
 from corpora import corpus_layout, remove_document
-from documents import DocumentRepository, DocumentStatus
+from documents import DocumentRepository, DocumentStatus, remove_stored_file
 from embeddings.embedder import Embedder, shared_embedder
 from embeddings.storage import VectorStorage
 from ingestion.cleaner import TextCleaner
@@ -150,6 +150,11 @@ class DocumentIndexer:
         raced the other way round.
         """
         result = remove_document(job.corpus_id, job.document_id)
+        # The upload itself, too. DELETE tries to unlink it, but this job still
+        # had the file open — Windows refuses that, and the handler logs and
+        # moves on — so the bytes a user asked to delete outlive the request
+        # that deleted them. Here the parser has closed it.
+        remove_stored_file(job.corpus_id, job.document_id)
         logger.info(
             "Document %s was deleted while indexing; discarded %d chunk(s) from "
             "corpus %s%s",

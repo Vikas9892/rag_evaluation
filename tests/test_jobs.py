@@ -357,6 +357,25 @@ class TestDeletedWhileIndexing:
         assert {r["metadata"]["document_id"] for r in records} == {kept.document_id}
         assert {r["document_id"] for r in records} == {"kept.md"}
 
+    def test_the_uploaded_file_is_removed_too(
+        self, repo, tmp_path, corpus, monkeypatch
+    ):
+        # DELETE could not unlink it — this job had it open — so the bytes the
+        # user asked to delete are still on disk when the job ends.
+        uploads = tmp_path / "uploads"
+        monkeypatch.setattr("documents.storage.UPLOAD_ROOT", uploads)
+        doc = upload(repo, tmp_path, corpus, SAMPLE)
+        stored = uploads / corpus / f"{doc.document_id}.md"
+        stored.parent.mkdir(parents=True)
+        stored.write_text(SAMPLE, encoding="utf-8")
+
+        vanishing = self._VanishingRepo(repo, doc.document_id)
+        DocumentIndexer(vanishing, embedder=FakeEmbedder()).handle(
+            IndexingJob(job_id="j", document_id=doc.document_id, corpus_id=corpus)
+        )
+
+        assert not stored.exists()
+
     def test_the_corpus_cache_is_invalidated_after_a_discard(
         self, repo, tmp_path, corpus
     ):

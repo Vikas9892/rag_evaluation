@@ -274,6 +274,30 @@ class TestDeletion:
         assert body["chunks_removed"] > 0
         assert body["chunks_remaining"] == 0
 
+    def test_the_uploaded_file_is_removed_and_said_so(self, client):
+        # The reply used to claim "Document, file and chunks removed" whether or
+        # not the unlink worked.
+        document_id = upload(client).json()["document_id"]
+        body = client.delete(f"/documents/{document_id}").json()
+
+        assert body["file_removed"] is True
+        assert "file" in body["detail"]
+
+    def test_a_file_that_could_not_be_removed_is_not_claimed_as_removed(
+        self, client, monkeypatch
+    ):
+        # An indexing job holding the file open is the real case; Windows
+        # refuses the unlink and the worker clears it when it finishes.
+        document_id = upload(client).json()["document_id"]
+        monkeypatch.setattr(
+            "api.routers.documents.remove_stored_file", lambda *_: False
+        )
+        body = client.delete(f"/documents/{document_id}").json()
+
+        assert body["file_removed"] is False
+        assert "still being indexed" in body["detail"]
+        assert body["deleted"] is True  # the record and chunks did go
+
     def test_removing_the_last_document_removes_the_corpus(self, client):
         upload(client, corpus="solo")
         document_id = client.get("/documents", params={"corpus_id": "solo"}).json()[

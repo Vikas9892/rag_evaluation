@@ -44,6 +44,7 @@ from documents import (
     UnsupportedFileType,
     new_document_id,
     read_limited,
+    remove_stored_file,
     safe_display_name,
     store,
     validate,
@@ -249,13 +250,14 @@ async def delete_document(
     if document is None:
         raise HTTPException(status_code=404, detail="No such document.")
 
+    # Whether the bytes are gone is tracked, not assumed: an indexing job that
+    # still has the file open makes Windows refuse the unlink, and the reply
+    # used to claim "file removed" regardless. When that happens the worker
+    # clears it as it finishes, so the file goes either way — but not yet, and
+    # a delete confirmation should not describe a state that has not arrived.
+    file_removed = True
     if document.stored_path:
-        try:
-            from pathlib import Path
-
-            Path(document.stored_path).unlink(missing_ok=True)
-        except OSError:
-            logger.warning("Could not remove stored file for %s", document_id)
+        file_removed = remove_stored_file(document.corpus_id, document_id)
 
     try:
         removal = remove_document(document.corpus_id, document_id)
@@ -275,13 +277,24 @@ async def delete_document(
         "chunks_removed": removal.removed_chunks,
         "chunks_remaining": removal.remaining_chunks,
         "corpus_deleted": removal.corpus_deleted,
-        "detail": (
-            "Document, file and chunks removed; the corpus was empty afterwards and "
-            "has been deleted."
-            if removal.corpus_deleted
-            else f"Document, file and {removal.removed_chunks} chunk(s) removed."
-        ),
+        "file_removed": file_removed,
+        "detail": _deletion_detail(removal, file_removed),
     }
+
+
+def _deletion_detail(removal, file_removed: bool) -> str:
+    subject = "Document, file and" if file_removed else "Document and"
+    if removal.corpus_deleted:
+        detail = (
+            f"{subject} chunks removed; the corpus was empty afterwards and "
+            "has been deleted."
+        )
+    else:
+        detail = f"{subject} {removal.removed_chunks} chunk(s) removed."
+    if not file_removed:
+        detail += " The uploaded file is still being indexed and is removed "
+        detail += "when that finishes."
+    return detail
 
 
 @router.get(

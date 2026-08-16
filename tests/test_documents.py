@@ -18,6 +18,7 @@ from documents import (
     new_document_id,
     progress_fraction,
     read_limited,
+    remove_stored_file,
     safe_display_name,
     store,
     suffix_of,
@@ -260,3 +261,59 @@ class TestReadLimited:
         import io
 
         assert read_limited(io.BytesIO(b"short"), limit=100) == b"short"
+
+
+class TestRemoveStoredFile:
+    """Deleting the bytes, not only the record.
+
+    DELETE unlinked a recorded path inside a try/except that logged and moved
+    on, then reported "Document, file and chunks removed" either way. On
+    Windows an indexing job still holding the file makes that unlink fail, so
+    the reply claimed a deletion that had not happened and the upload stayed on
+    disk indefinitely.
+    """
+
+    def test_removes_the_upload_by_id(self, tmp_path, monkeypatch):
+        monkeypatch.setattr("documents.storage.UPLOAD_ROOT", tmp_path)
+        directory = tmp_path / "corpus-a"
+        directory.mkdir()
+        (directory / "abc123.md").write_text("content", encoding="utf-8")
+
+        assert remove_stored_file("corpus-a", "abc123") is True
+        assert not (directory / "abc123.md").exists()
+
+    def test_leaves_another_documents_file_alone(self, tmp_path, monkeypatch):
+        monkeypatch.setattr("documents.storage.UPLOAD_ROOT", tmp_path)
+        directory = tmp_path / "corpus-a"
+        directory.mkdir()
+        (directory / "abc123.md").write_text("mine", encoding="utf-8")
+        (directory / "def456.md").write_text("theirs", encoding="utf-8")
+
+        remove_stored_file("corpus-a", "abc123")
+
+        assert (directory / "def456.md").exists()
+
+    def test_reports_false_when_there_was_nothing_to_remove(
+        self, tmp_path, monkeypatch
+    ):
+        # The caller uses this to decide what to tell the user, so "nothing
+        # happened" must be distinguishable from "done".
+        monkeypatch.setattr("documents.storage.UPLOAD_ROOT", tmp_path)
+        assert remove_stored_file("never-existed", "abc123") is False
+
+    def test_an_unremovable_file_is_reported_rather_than_raised(
+        self, tmp_path, monkeypatch
+    ):
+        # Windows refuses to unlink a file another thread holds open. The
+        # delete request has already done its real work by then.
+        monkeypatch.setattr("documents.storage.UPLOAD_ROOT", tmp_path)
+        directory = tmp_path / "corpus-a"
+        directory.mkdir()
+        (directory / "abc123.md").write_text("locked", encoding="utf-8")
+
+        def refuse(self):
+            raise PermissionError("file is open in another process")
+
+        monkeypatch.setattr("pathlib.Path.unlink", refuse)
+
+        assert remove_stored_file("corpus-a", "abc123") is False

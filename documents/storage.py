@@ -12,7 +12,10 @@ import uuid
 from pathlib import Path
 from typing import BinaryIO, Tuple
 
+from config.logging_config import get_logger
 from config.settings import INDEX_DIR
+
+logger = get_logger(__name__)
 
 UPLOAD_ROOT = INDEX_DIR / "uploads"
 
@@ -101,6 +104,31 @@ def store(
     path.write_bytes(data)
 
     return path, hashlib.sha256(data).hexdigest()
+
+
+def remove_stored_file(corpus_id: str, document_id: str) -> bool:
+    """Delete the upload written for this document, if it is still there.
+
+    Matches on the id rather than a recorded path, so it works from the worker
+    after the record has already gone. The stored name is the document id plus
+    a validated suffix, so the glob cannot match another document's file.
+
+    Returns whether anything was removed. A file held open by another thread —
+    which Windows refuses to unlink — is reported as not removed rather than
+    raising, because the caller's own work has already succeeded by then.
+    """
+    directory = UPLOAD_ROOT / corpus_id
+    if not directory.is_dir():
+        return False
+
+    removed = False
+    for path in directory.glob(f"{document_id}.*"):
+        try:
+            path.unlink()
+            removed = True
+        except OSError:
+            logger.warning("Could not remove stored file %s", path)
+    return removed
 
 
 def new_document_id() -> str:
