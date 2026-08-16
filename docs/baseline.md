@@ -73,3 +73,38 @@ Already present and to be preserved, not rebuilt:
 - No corpus namespace. There is exactly one index, shared by everything.
 - No per-document lifecycle, status, or deletion.
 - No dark mode.
+
+---
+
+## Verification after the workspace/lab work
+
+The point of the snapshot above. Re-measured on the same corpus and the same
+labelled dataset, with the upload pipeline, corpus namespacing, job queue and
+the rebuilt frontend all in place.
+
+| Metric | Baseline | Now | |
+|---|---|---|---|
+| Precision@5 | 0.2000 | 0.2000 | unchanged |
+| Recall@5 | 0.9623 | 0.9623 | unchanged |
+| Hit rate | 0.9623 | 0.9623 | unchanged |
+| MRR | 0.8780 | 0.8780 | unchanged |
+
+Retrieval latency is not compared: it is a property of the machine and the
+cache state at the time of the run, not of the index. It is now reported as p50
+and p95 alongside the mean, because a mean over 53 questions hides the tail.
+
+Reproduce: `GET /evaluation?top_k=5&retriever=dense`.
+
+The suite grew rather than shrank — no test was deleted to make a change pass:
+
+| Check | Baseline | Now |
+|---|---|---|
+| Python tests | 453 | 644 |
+| Python coverage | 91% | above the 85% gate |
+| Frontend unit tests | 224 | 351 |
+| Frontend E2E tests | — | 5, against a real API and index |
+
+One test was replaced rather than removed: `test_delete_is_not_allowed` asserted
+that CORS refused `DELETE`, which was correct when written and became a test
+pinning a bug in place once document deletion shipped. It is now derived from
+the app's own routes, so the allowlist cannot silently fall behind them again.

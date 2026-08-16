@@ -1,6 +1,6 @@
 # Frontend Architecture
 
-**Status:** built through Milestone 7 — see [roadmap](roadmap.md) for what remains
+**Status:** built through the workspace/lab split — see [roadmap](roadmap.md) for what remains
 **Decisions:** [ADR 008](decisions/008-frontend-architecture.md)
 
 This document was written in Milestone 2 as a design, before the tree existed. The
@@ -104,12 +104,22 @@ error at the call site, not as a wrong number on screen.
 
 | Route | Rendering | Data |
 |-------|-----------|------|
-| `/` | server shell + client status widget | `GET /health`, `GET /metrics` |
-| `/query` | client | `POST /query`, `POST /stream` |
-| `/evaluation` | client | evaluation run endpoints (Phase 6) |
-| `/benchmarks` | client | benchmark comparison endpoints (Phase 6) |
-| `/settings` | client | URL params + `GET /config` |
-| `/about` | server, static | none |
+| `/` | server shell + client panels | `GET /health/deep`, `GET /config`, `GET /metrics`, `GET /corpora` |
+| `/workspace` | client | `POST/GET/DELETE /documents`, `GET /queue` |
+| `/query` | client | `POST /stream`, `GET /corpora` |
+| `/evaluation` | client | `GET /evaluation` |
+| `/benchmarks` | client | `GET /benchmarks` |
+| `/settings` | client | `GET /config` |
+| `/about` | server shell + client metrics panel | `GET /evaluation`, `GET /config` |
+
+`/query`, `/evaluation` and `/workspace` read `useSearchParams`, so each sits behind a
+`Suspense` boundary — without one, the whole route opts out of static rendering and Next
+fails the build rather than doing it silently.
+
+The About page's metrics are fetched rather than written into the page. They were a
+hardcoded list once, and by the time anyone noticed they claimed Recall 1.00 over a
+dataset that had more than tripled — on a page arguing that a metric without ground
+truth is fabricated.
 
 ## Testing
 
@@ -119,9 +129,19 @@ error at the call site, not as a wrong number on screen.
 | `services/` | Vitest + MSW | request shape, status→`ApiError` mapping, timeouts |
 | `hooks/` | Vitest + RTL | loading/error/success transitions |
 | `components/` | RTL | rendering per state, including empty and error |
+| `e2e/` | Playwright | the real API, a real index, a real browser |
 
-Components are tested against mocked hooks, never a live backend — the same discipline that
-keeps 90% of the Python suite offline (ADR 005).
+Everything above `e2e/` is tested against mocked hooks, never a live backend — the same
+discipline that keeps 90% of the Python suite offline (ADR 005).
+
+That discipline has one blind spot, and `e2e/` exists for it: mocked tests cannot fail on
+a request the browser never successfully makes. Two bugs proved it. The query page
+ignored the corpus parameter, so uploads were answered from the benchmark corpus while
+every unit test passed. And cross-origin `DELETE` was missing from the CORS allowlist, so
+deleting a document had never worked in a browser at all.
+
+The end-to-end suite is not part of `npm run verify`: it needs both servers running and
+a browser. `npm run test:e2e` against a started stack.
 
 ## Environment
 
@@ -137,9 +157,13 @@ Nothing secret may ever use that prefix.
 
 Resolved.  `api/app.py` registers `CORSMiddleware` with an explicit allowlist from
 `ALLOWED_ORIGINS` (default `http://localhost:3000`), `allow_credentials=False`, and only
-the verbs the client issues (`GET`, `POST`, `OPTIONS`).  `*` is accepted as an operator
-override but logs a warning: a wildcard on an endpoint that spends Groq budget lets any
-page on the internet spend it.
+the verbs the client issues (`GET`, `POST`, `DELETE`, `OPTIONS`).  `*` is accepted as an
+operator override but logs a warning: a wildcard on an endpoint that spends Groq budget
+lets any page on the internet spend it.
+
+That list is now checked against the app's own routes by a test. It was maintained by
+hand, `DELETE` was never added when document deletion shipped, and the resulting
+preflight failure was invisible to every test that calls the API in-process.
 
 ## Error taxonomy
 

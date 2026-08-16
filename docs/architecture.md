@@ -2,9 +2,77 @@
 
 ## Overview
 
-The RAG Evaluation System is a production-grade Retrieval-Augmented Generation pipeline
-built in Python.  Documents are ingested offline; at query time the system retrieves
-relevant passages and feeds them as grounded context to an LLM.
+The RAG Evaluation Platform is a Retrieval-Augmented Generation pipeline built in
+Python, with a Next.js front end. At query time the system retrieves relevant passages
+and feeds them as grounded context to an LLM.
+
+Documents reach the index two ways. The benchmark corpus is built offline by scripts, so
+its contents — and therefore every published metric — are reproducible from the
+repository. A user's own documents are uploaded through the API and indexed
+asynchronously. Both land in the same shape and are read by the same retriever; only
+the namespace differs.
+
+---
+
+## Corpus namespacing
+
+One index per corpus, resolved through `corpora/layout.py`:
+
+```
+index/
+├── faiss.index          ┐
+├── metadata.json        ├─ the evaluation corpus keeps its original paths,
+├── vectors.npy          ┘  so every published number stays reproducible
+├── corpora/
+│   └── <corpus_id>/     ← everything uploaded, one directory per corpus
+│       ├── faiss.index
+│       ├── metadata.json
+│       └── vectors.npy
+├── uploads/<corpus_id>/ ← stored files, named by document id
+└── documents.db         ← SQLite: per-document status and lifecycle
+```
+
+A corpus id must match `^[a-z0-9][a-z0-9_-]{0,63}$`. Invalid ids raise rather than being
+sanitised: the id becomes a directory name, so quietly rewriting `../../etc` hides an
+attack where refusing it surfaces one. The frontend mirrors the same pattern, and a
+contract test fails if the two ever disagree.
+
+`RAGService` instances are cached per corpus, and the cache is invalidated when a
+document is indexed or deleted — otherwise a query would be answered from an index that
+no longer exists on disk.
+
+---
+
+## Asynchronous indexing
+
+```
+POST /documents  ──►  validate (size, type, filename)
+                      store file under index/uploads/<corpus>/
+                      insert record: status = QUEUED
+                      enqueue job                     ──► 202 + job id
+                                                           │
+   JobQueue (InProcessQueue thread, or RedisQueue)  ◄───────┘
+                      │
+   DocumentIndexer    ▼
+      parse ─► clean ─► chunk ─► embed ─► index
+        │       │        │        │        │
+        └───────┴────────┴────────┴────────┴─► status written at each stage
+                                                (PARSING … INDEXING … READY)
+```
+
+The client polls `GET /documents/{id}/status` and stops when the status is terminal.
+Chunks are appended through `VectorStorage.append()` rather than triggering a rebuild.
+
+Durability is reported, not implied. `InProcessQueue` runs a worker thread inside the
+API process: on startup, documents left mid-pipeline by a restart are requeued, but a
+job still sitting in the queue when the process died is gone. `GET /queue` says which
+backend is in use and whether it is durable, and the Workspace surfaces that. Setting
+`REDIS_URL` switches to a shared queue that survives a restart.
+
+Deletion filters the corpus's metadata and vectors by `document_id` and rebuilds the
+FAISS index from the vectors already on disk — exact, and without re-embedding
+anything. It is O(corpus) per deletion, which is the right trade at this scale and
+would need tombstones at a larger one.
 
 ---
 

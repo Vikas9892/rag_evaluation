@@ -1,8 +1,20 @@
-# RAG Evaluation System
+# RAG Evaluation Platform
 
-A production-grade Retrieval-Augmented Generation pipeline built from first principles
-in Python — no LangChain magic, no framework abstractions.  Every component is tested,
-benchmarked, and deployable to AWS Lambda in one command.
+A Retrieval-Augmented Generation pipeline built from first principles in Python — no
+LangChain, no framework abstractions — with a Next.js front end that makes its retrieval
+inspectable rather than taking it on trust.
+
+Two modes, over one pipeline:
+
+- **Workspace** — upload your own documents, watch them parse, chunk, embed and index on
+  a background worker, then ask questions of them and see the chunks each answer came
+  from.
+- **Evaluation Lab** — measure whether that retrieval is any good: Precision@K, Recall,
+  MRR and hit rate over a labelled dataset, the questions that failed, and a benchmark
+  matrix across retrievers, top-K and reranking.
+
+The same retriever answers both, which is what makes the benchmark numbers say anything
+about your own documents.
 
 [![CI](https://github.com/Vikas9892/rag_evaluation/actions/workflows/ci.yml/badge.svg)](https://github.com/Vikas9892/rag_evaluation/actions/workflows/ci.yml)
 [![Coverage](https://codecov.io/gh/Vikas9892/rag_evaluation/branch/main/graph/badge.svg)](https://codecov.io/gh/Vikas9892/rag_evaluation)
@@ -26,6 +38,24 @@ benchmarked, and deployable to AWS Lambda in one command.
 ---
 
 ## Architecture
+
+```
+                      Next.js 16 · React 19 · TanStack Query
+  Workspace ─┐                                    ┌─ Evaluation Lab
+  upload,    ├──────────► FastAPI ◄───────────────┤  metrics, failures,
+  index,     │   SSE stream · REST · OpenAPI      │  benchmark matrix
+  query    ──┘                │                   └─
+                              │
+                    ┌─────────┴─────────┐
+                    │                   │
+             indexing worker      RAGService.answer()
+             (thread or Redis)          │
+                    │                   ▼
+        parse → chunk → embed      Retriever (below)
+                    │
+          index/corpora/<id>/  ← one namespace per corpus,
+          index/documents.db      evaluation kept separate
+```
 
 ```
 Documents (.pdf .txt .md)
@@ -58,6 +88,10 @@ vectors.npy  faiss.index          ← offline ingestion
     RAGService.answer() → RAGResponse
          │
     FastAPI POST /query → QueryResponse (JSON)
+         │
+    POST /stream → Server-Sent Events (sources, tokens, done)
+         │
+    Retrieval trace: per-stage rank and score for every chunk
 ```
 
 See [docs/benchmark_report.md](docs/benchmark_report.md) for measured retrieval
@@ -158,6 +192,25 @@ End-to-end (retrieve + generate): **~1.5–3.5 s**, dominated by the LLM call.
 
 ## Getting Started
 
+Run the API and the front end together — the browser talks to the API
+directly, so both must be up.
+
+```bash
+# Terminal 1 — API on :8000
+python -m uvicorn api.app:app --port 8000
+
+# Terminal 2 — front end on :3000
+cd frontend && npm install && npm run dev
+```
+
+The front end reads `NEXT_PUBLIC_API_URL` (default `http://localhost:8000`).
+Only public configuration belongs there: anything in a `NEXT_PUBLIC_` variable
+is compiled into the bundle and served to every visitor. The Groq key is read by
+the API alone and never reaches the browser.
+
+After changing an API schema, regenerate the client types rather than hand-editing
+them — `npm run gen:api` reads the running server's OpenAPI document.
+
 ### Prerequisites
 
 - Python 3.11 or 3.12
@@ -240,6 +293,40 @@ curl http://localhost:8000/metrics
 # {"total_queries": 42, "avg_retrieval_ms": 24.1, "avg_generation_ms": 1820.3, "errors": 0}
 ```
 
+### Documents and corpora
+
+Uploads are asynchronous. `POST /documents` returns `202` with a job id and the
+document in `QUEUED`; the worker moves it through parsing, chunking, embedding and
+indexing, and the client polls until it reports `READY` or `FAILED`.
+
+```bash
+# Upload into a named corpus. 25 MB limit; .pdf .txt .md .markdown.
+curl -X POST "http://localhost:8000/documents?corpus_id=workspace"      -F "file=@notes.md"
+# {"document_id": "8e275e…", "job_id": "…", "status": "QUEUED"}
+
+curl "http://localhost:8000/documents/8e275e…/status"
+# {"status": "EMBEDDING", "progress": 0.66, "chunk_count": 0, "error": null}
+
+# Removing a document rebuilds the index from the vectors already on disk —
+# nothing is re-embedded.
+curl -X DELETE "http://localhost:8000/documents/8e275e…"
+# {"deleted": true, "chunks_removed": 6, "chunks_remaining": 142}
+
+curl http://localhost:8000/corpora
+# {"corpora": [{"corpus_id": "evaluation", "chunks": 148, "is_evaluation": true}, …]}
+
+# Whether indexing is durable. The in-process worker recovers unfinished jobs
+# on restart but loses queued ones; set REDIS_URL for a shared, durable queue.
+curl http://localhost:8000/queue
+```
+
+A byte-identical file already in the corpus returns the existing document and
+queues nothing. Corpus ids must match `^[a-z0-9][a-z0-9_-]{0,63}$` — a bad id is
+refused rather than sanitised, since the id becomes a directory name.
+
+Every query endpoint takes an optional `corpus_id`; omitted, it means the
+benchmark corpus, which uploads never touch.
+
 ---
 
 ## Testing
@@ -258,6 +345,25 @@ pytest tests/test_hybrid_retriever.py -v
 
 Coverage is gated at 85% in CI and currently sits above 90%. The uncovered
 lines are real-API paths (GroqGenerator) that require a live GROQ_API_KEY.
+
+### Frontend
+
+```bash
+cd frontend
+npm run verify        # typecheck, lint, format check, then the unit suite
+npm run test:e2e      # Playwright — needs both servers already running
+```
+
+`verify` mocks the API, which is right for asserting what the UI does with a
+response and useless for asserting that the API is reachable at all. The
+end-to-end suite covers that seam against a real index: an upload reaching the
+worker, a question answered from the uploaded corpus rather than the benchmark
+one, and a deleted document leaving the index as well as the list. It found a
+CORS misconfiguration that had broken document deletion in every browser while
+every unit test passed.
+
+It is deliberately not part of `verify`: it needs two servers and a browser, and
+a check that cannot be run casually is one that stops being run.
 
 ---
 
@@ -317,10 +423,22 @@ rag_evaluation/
 │   ├── dependencies.py   # lru_cache singleton injection
 │   └── routers/          # /query /stream /health /metrics
 ├── aws/                  # Mangum handler, SAM template
+├── corpora/              # Per-corpus paths, id validation, index rebuild
+├── documents/            # Document records (SQLite), upload storage
+├── jobs/                 # Job queue (in-process / Redis), indexing worker
 ├── evaluation/           # Metrics, BenchmarkRunner, ReportGenerator
 ├── scripts/              # Ingestion, evaluation, benchmark CLI scripts
 ├── tests/                # unit, contract and API tests; 85% coverage gate
 ├── load_tests/           # Locust load test scenarios
+├── frontend/
+│   ├── app/              # Next.js routes: overview, workspace, query,
+│   │                     #   evaluation, benchmarks, settings, about
+│   ├── components/       # UI, one folder per surface
+│   ├── hooks/            # TanStack Query hooks
+│   ├── lib/              # URL params, sorting and recommendation logic
+│   ├── services/api.ts   # The only place that talks to the API
+│   ├── types/            # Generated from the live OpenAPI schema
+│   └── e2e/              # Playwright, against a real API and index
 ├── docs/
 │   ├── architecture.md   # System diagrams
 │   └── decisions/        # 7 Architecture Decision Records
@@ -344,6 +462,35 @@ Seven Architecture Decision Records document the key technical choices:
 | [005](docs/decisions/005-provider-abstraction.md) | Abstractions | BaseGenerator/Parser/Reranker; testability rationale |
 | [006](docs/decisions/006-evaluation.md) | Evaluation | Separate retrieval vs generation metrics; LLM-as-judge |
 | [007](docs/decisions/007-lambda.md) | Deployment | Lambda vs Fargate; Mangum; HTTP API vs REST API |
+
+---
+
+## Limitations
+
+Stated because a platform that measures other systems' retrieval should be
+straight about its own.
+
+- **Indexing durability.** The default worker is a thread in the API process. It
+  recovers documents left mid-pipeline by a restart, but a job still queued when
+  the process dies is lost, and each process consumes its own queue. `GET /queue`
+  reports this rather than implying otherwise, and the Workspace says so on the
+  page. Setting `REDIS_URL` switches to a durable shared queue; that path is
+  tested against a stub client, not a live server.
+- **Dataset size.** 53 labelled questions over 148 chunks. Differences of a few
+  hundredths of MRR are within the noise of one question changing rank, which is
+  why the benchmark page reports a tolerance band instead of crowning a winner.
+- **Precision@K is structurally capped** near 1/K on this dataset. It is reported
+  because omitting an inconvenient metric is worse, but Recall and MRR are the
+  ones to read.
+- **Deleting rebuilds the whole index** for that corpus. It is exact and does not
+  re-embed, but it is O(corpus) per deletion and would need a tombstone-and-compact
+  scheme at a size where that matters.
+- **Latency figures are machine-dependent.** They are measured on the host that
+  served the request, and reported as p50 and p95 rather than a mean so the tail
+  is visible.
+- **No authentication.** Every corpus is visible to every caller. This is a
+  single-tenant tool; multi-tenancy would need auth before uploads could be
+  considered private.
 
 ---
 
