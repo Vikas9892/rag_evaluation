@@ -12,16 +12,15 @@ coverage.xml
 .env
 *.env
 
-# Large artefacts — mounted at runtime
+# Large artefacts — the index is built during the image build, not copied in,
+# so a stale local one cannot be shipped by accident.
 index/
 reports/
 logs/
-data/
 
 # Dev and test files not needed in production image
 tests/
 load_tests/
 docs/
-scripts/
 .coveragerc
 pyproject.toml

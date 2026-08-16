@@ -15,8 +15,12 @@ services:
       GROQ_API_KEY: "${GROQ_API_KEY}"
       LOG_LEVEL: "INFO"
     volumes:
-      # Mount pre-built FAISS index and metadata from the host
-      - ./index:/app/index:ro
+      # A named volume, not a read-only bind mount. The image already contains
+      # the benchmark index, and Docker seeds an empty named volume from the
+      # image, so the corpus is there on first run — while uploads, the document
+      # database and rebuilt indexes survive a restart instead of being refused
+      # by a read-only filesystem.
+      - index:/app/index
       # Persist logs outside the container
       - ./logs:/app/logs
     restart: unless-stopped
@@ -27,3 +31,8 @@ services:
       timeout: 10s
       retries: 3
       start_period: 15s
+
+volumes:
+  # Uploads and the document database live here, so `docker compose down`
+  # without `-v` keeps them.
+  index:
