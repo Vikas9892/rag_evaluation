@@ -315,7 +315,7 @@ them, over the *same* retriever the lab benchmarks. Its baseline is captured in
 | 16 | About | ✅ | `a1e3ede` |
 | 17 | Pydantic schemas, 202 on upload | ✅ | `5f2fcc9`, `api/schemas.py` |
 | 18 | Error handling | ✅ | `5f2fcc9`, `6710cef` — 422 bodies now name the field |
-| 19 | Testing, unit through E2E | ✅ | `dca40b9` — 651 Python, 359 frontend, 5 E2E |
+| 19 | Testing, unit through E2E | ✅ | `dca40b9`, `7d62400` — 666 Python, 359 frontend, 5 E2E |
 | 20 | Upload security | ✅ | `e830503` — type, size, and a filename never trusted as a path |
 | 21 | Performance | ✅ | `6710cef`, `f869bfa` — one shared model, stage timings surfaced |
 | 22 | Evaluation preserved | ✅ | verified in `baseline.md`; four configurations re-measured |
@@ -331,6 +331,34 @@ that genuinely wants a different model still gets one.
 pre-change baseline, and three further configurations reproduce the benchmark
 report to the digit. Retrieval quality was not traded for any of the above.
 
+## Phase 24 — the build nobody was reading
+
+Added after the fact, because the twenty-three phases above were all marked
+done while CI had been red the entire time. The badge said so; nobody looked.
+
+| Fix | Commit | What it was |
+|---|---|---|
+| `python-multipart` undeclared | `a24bc8b` | FastAPI raises when it *builds* an `UploadFile` route, so collection aborted and every API test errored on both Python versions. Installed here as another package's transitive dependency, so only CI could see it. |
+| `/settings` needed a Groq key | `aea0d94` | It declared a `RAGService` dependency it never used. Building that constructs the Groq client, so the endpoint answered 503 — the page explaining how a deployment is configured was dead exactly where a reader would look. |
+| Duplicated test block | `71fa71d` | The last 82 lines of `test_chunking.py` repeated the preceding 82 verbatim; Python bound the later copy, so a whole test class was shadowed. Ruff's F811 surfaced it. |
+| Leaked SQLite connections | `7d62400` | 211 ResourceWarnings per run. `pytest` now errors on `unclosed database`. |
+| Ruff and black | `b9c60fb`, `3326ace` | 30 findings and 64 unformatted files. Both now configured and gated by a CI job, with pinned versions. |
+
+Three of those five were invisible locally and only ever failed in CI. The
+common shape: a check that ran only where it could not fail. `GROQ_API_KEY` is
+set on this machine and unset on the runner, so the pre-push command is now
+
+```bash
+env -u GROQ_API_KEY pytest --cov=. --cov-fail-under=85
+```
+
+**The `/settings` fix cost coverage, and that was worth noticing.** The endpoint
+had been the only thing exercising the real-corpus service builder, by accident.
+`tests/test_dependencies.py` now covers it deliberately — building over the real
+evaluation corpus, the cache that stops a query paying for an index load twice,
+404 against 422 corpus resolution, and the 503 with no key. `api/dependencies.py`
+went 67% → 90%; the suite went 651 → 666 tests and 93% → 94%.
+
 ## What is left
 
 - **Deploy the frontend.** `frontend/vercel.json` and
@@ -340,6 +368,12 @@ report to the digit. Retrieval quality was not traded for any of the above.
   generation evaluator exists and costs LLM calls, so it has no endpoint yet.
 - **A demo GIF.** Screenshots are captured headlessly into `docs/screenshots/`;
   a recorded walkthrough is not.
+- **CI does not run the frontend.** `npm test`, `typecheck`, `lint`,
+  `format:check` and `build` are local-only, via `npm run verify`. Given that
+  three backend failures survived for weeks precisely because they only ran
+  where they could not fail, a frontend job is the obvious next gate — 359 unit
+  tests currently depend on somebody remembering. `format:check` had in fact
+  been failing on a committed file for days before anyone ran it.
 
 ---
 

@@ -343,8 +343,39 @@ pytest tests/test_api.py -v
 pytest tests/test_hybrid_retriever.py -v
 ```
 
-Coverage is gated at 85% in CI and currently sits above 90%. The uncovered
-lines are real-API paths (GroqGenerator) that require a live GROQ_API_KEY.
+**666 tests, 94% coverage**, gated at 85% in CI. The uncovered lines are
+real-API paths (`GroqGenerator`) that need a live key.
+
+> **Run it once the way CI does, before pushing.**
+>
+> ```bash
+> env -u GROQ_API_KEY pytest --cov=. --cov-fail-under=85
+> ```
+>
+> The runner has no `GROQ_API_KEY`, so a suite that is green locally can still
+> fail there. That is not hypothetical: `GET /settings` declared a `RAGService`
+> dependency it never used, which constructs the Groq client, so the endpoint
+> answered 503 on any deployment without a key. Six tests caught it — none of
+> which could run locally, because the key was set. Coverage without the key is
+> ~93.7%, still above the gate.
+
+`pytest` fails on an unclosed SQLite connection rather than warning about it.
+The document repository keeps one connection per thread; leaving them open is a
+leak, and on Windows it holds the database file against the `tmp_path` teardown
+that follows.
+
+### Linting
+
+```bash
+ruff check .          # pyflakes + pycodestyle errors
+black --check .       # formatting
+```
+
+Both run as their own CI job, without the index build — waiting for model
+weights to report an unused import would discourage running them at all. Ruff
+is limited to `E` and `F`: this codebase predates having a linter, and the full
+default rule set would bury an undefined name under style noise. `E501` is off
+because line length is black's decision.
 
 ### Frontend
 
@@ -441,7 +472,7 @@ rag_evaluation/
 │   └── e2e/              # Playwright, against a real API and index
 ├── docs/
 │   ├── architecture.md   # System diagrams
-│   └── decisions/        # 7 Architecture Decision Records
+│   └── decisions/        # 8 Architecture Decision Records
 ├── Dockerfile            # Multi-stage production image
 ├── docker-compose.yml    # One-command local deployment
 └── .github/workflows/ci.yml  # GitHub Actions (Python 3.11 + 3.12)
@@ -451,17 +482,18 @@ rag_evaluation/
 
 ## Design Decisions
 
-Seven Architecture Decision Records document the key technical choices:
+Eight Architecture Decision Records document the key technical choices:
 
 | # | Decision | Summary |
 |---|----------|---------|
 | [001](docs/decisions/001-parser.md) | Document Parser | BaseParser + registry; PyMuPDF over pypdf |
-| [002](docs/decisions/002-recursive-chunking.md) | Chunking | RecursiveChar 500/100; why not sentence splitters |
+| [002](docs/decisions/002-recursive-chunking.md) | Chunking | Heading-aware 250/50 with a merge floor; why not sentence splitters |
 | [003](docs/decisions/003-bge.md) | Embedding Model | BGE-small: best MTEB/MB ratio under Lambda limit |
 | [004](docs/decisions/004-faiss.md) | Vector Index | IndexFlatIP exact search; why not HNSW at this scale |
 | [005](docs/decisions/005-provider-abstraction.md) | Abstractions | BaseGenerator/Parser/Reranker; testability rationale |
 | [006](docs/decisions/006-evaluation.md) | Evaluation | Separate retrieval vs generation metrics; LLM-as-judge |
 | [007](docs/decisions/007-lambda.md) | Deployment | Lambda vs Fargate; Mangum; HTTP API vs REST API |
+| [008](docs/decisions/008-frontend-architecture.md) | Frontend | Next.js App Router; types generated from OpenAPI; TanStack Query |
 
 ---
 

@@ -109,12 +109,40 @@ The suite grew rather than shrank — no test was deleted to make a change pass:
 
 | Check | Baseline | Now |
 |---|---|---|
-| Python tests | 453 | 651 |
-| Python coverage | 91% | 93% (gate: 85%) |
-| Frontend unit tests | 224 | 359 |
+| Python tests | 453 | 666 |
+| Python coverage | 91% | 94%, and 93.7% without a Groq key (gate: 85%) |
+| Frontend unit tests | 224 | 359 (25 files) |
 | Frontend E2E tests | — | 5, against a real API and index |
+| CI | green | green — lint, Python 3.11, Python 3.12 |
 
 One test was replaced rather than removed: `test_delete_is_not_allowed` asserted
 that CORS refused `DELETE`, which was correct when written and became a test
 pinning a bug in place once document deletion shipped. It is now derived from
 the app's own routes, so the allowlist cannot silently fall behind them again.
+
+82 lines were deleted from `test_chunking.py`, and no assertion went with them:
+the file ended with a verbatim copy of `MARKDOWN`, `md_splitter` and
+`TestShortChunkMerging`. Python binds the later definition, so the first copy of
+the class had been shadowed and never ran. The count is unchanged at 43, which
+is what confirms the copies were identical.
+
+## What the suite was not measuring
+
+Three things passed locally for months and were false:
+
+1. **CI had never run the API tests.** `python-multipart` was missing from
+   `requirements.txt` for the whole life of the upload endpoint. FastAPI raises
+   when it *builds* a route declaring `UploadFile`, so collection aborted and
+   every API test errored. It was installed here as another package's
+   transitive dependency, which is why only CI saw it.
+2. **`GET /settings` was dead without a Groq key.** It declared a `RAGService`
+   dependency it never used; building that constructs the Groq client, so the
+   endpoint answered 503. Six tests covered it and none of them could fail
+   locally, because `GROQ_API_KEY` is set here and unset on the runner.
+3. **211 SQLite connections leaked per run.** `DocumentRepository` cached one
+   connection per thread and closed none. `pytest` now errors on
+   `unclosed database` instead of printing it.
+
+The pattern behind all three: a check that only ever ran in the environment
+where it could not fail. `env -u GROQ_API_KEY pytest` is now the pre-push
+command for that reason.

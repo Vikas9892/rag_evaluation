@@ -6,6 +6,85 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ---
 
+## [1.1.0] — 2026-08-16
+
+The platform gains a second mode. It was a dashboard over a corpus fixed at
+build time; a user can now upload their own documents and query them, through
+the same retriever the Evaluation Lab benchmarks.
+
+### Added
+
+- **Document ingestion** — `POST /documents` returns **202 Accepted** and queues
+  the work. Parsing, chunking, embedding and indexing run on a worker
+  (`jobs/indexer.py`), never in the request. PDF, TXT and Markdown.
+- **Document management** — `GET /documents`, `GET /documents/{id}`,
+  `GET /documents/{id}/status`, `DELETE /documents/{id}`. Eight lifecycle
+  states from UPLOADING to READY, with per-stage progress and the failure
+  reason when there is one. Deletion is real: chunks leave the index, not just
+  the list.
+- **Corpus isolation** — every chunk carries a `corpus_id`, and retrieval is
+  scoped to one. Uploads are refused into the benchmark corpus, so a published
+  metric cannot move because somebody uploaded a file.
+- **Job queue** — in-process by default, Redis when configured. Startup requeues
+  documents a restart stranded mid-pipeline.
+- **Workspace UI** — drag-and-drop upload, live indexing stages, per-document
+  timings, and a link straight to querying the corpus.
+- **Query UI** — corpus selector, retriever, top-K and reranker as query-time
+  controls, with sources and a retrieval trace that reports the stages that
+  actually ran. A skipped reranker says "did not run" rather than going quiet.
+- **Evaluation Lab** — the existing evaluation surface, plus per-question
+  failures, worst-ranked questions and p50/p95 latency alongside the mean.
+- **Benchmark comparison** — sortable matrix and a recommended configuration
+  that states the latency it costs instead of naming a winner.
+- **Themes** — light, dark and system, persisted.
+- **Design system** — 15 shared primitives under `frontend/components/ui/`.
+- **Testing** — 666 Python tests (94% coverage), 359 frontend unit tests, and 5
+  Playwright end-to-end tests covering upload → READY → query → trace → delete
+  against a real API and index.
+- **Lint gate** — ruff and black configured in `pyproject.toml` and enforced by
+  their own CI job, with pinned versions.
+
+### Fixed
+
+- **`python-multipart` was never declared**, so CI had been red since the upload
+  endpoint landed. FastAPI raises when it *builds* a route declaring
+  `UploadFile`, so collection aborted and every API test errored. A test now
+  reads `requirements.txt`, because an installed-but-undeclared package is
+  invisible to every other check.
+- **`GET /settings` required a Groq key.** It declared a `RAGService` dependency
+  it never used, so a deployment without `GROQ_API_KEY` got a 503 from the one
+  page that explains how the deployment is configured.
+- **CORS refused `DELETE`**, which had broken document deletion in every browser
+  while every unit test passed. The allowlist is now derived from the app's own
+  routes.
+- **Leaked SQLite connections** — `DocumentRepository` cached one per thread and
+  closed none, at 211 ResourceWarnings per run. It is now a context manager, app
+  shutdown closes it, and `pytest` errors on `unclosed database`.
+- **A shadowed test class** — the last 82 lines of `test_chunking.py` duplicated
+  the preceding 82, so one copy never ran.
+- **Undefined forward reference** — `DocumentSplitter.from_config` was annotated
+  with a quoted `"ChunkingConfig"` that was never imported.
+
+### Changed
+
+- **One embedding model per process.** Every retriever and the indexing worker
+  built its own `Embedder`; a process serving eight corpora held eight identical
+  copies of bge-small. `shared_embedder()` is cached by model and device.
+- **Chunking configuration** is now an object (`ChunkingConfig`) and is
+  explicitly indexing-time — the API and the UI both say that changing it
+  requires a re-index, rather than offering it beside top-K.
+- **Indexing timings** are stored on the document and shown in the workspace,
+  instead of only reaching a server log.
+
+### Unchanged
+
+Retrieval quality. Precision@5 (0.2000), Recall@5 (0.9623), hit rate (0.9623)
+and MRR (0.8780) are identical to the pre-change baseline, and three further
+configurations reproduce [the benchmark report](docs/benchmark_report.md) to the
+digit. See [docs/baseline.md](docs/baseline.md).
+
+---
+
 ## [1.0.0] — 2026-07-10
 
 ### Phase 8 — Production Grade
