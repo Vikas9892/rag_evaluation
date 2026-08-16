@@ -1,0 +1,23 @@
+# Line endings are normalised to LF in the repository, and checked out as LF
+# everywhere including Windows.
+#
+# Without this, Git for Windows' default (core.autocrlf=true) rewrites every
+# file to CRLF on checkout, and `prettier --check` — which expects LF — fails on
+# 108 files in a fresh clone before a contributor has touched anything. The same
+# default is what let 40 files come to be *stored* with CRLF, which made an
+# editor's save look like a 1,200-line diff of untouched code.
+#
+# eol=lf rather than plain text=auto: the latter still hands Windows CRLF on
+# checkout, which is the half that breaks the tooling.
+* text=auto eol=lf
+
+# Binary, so Git must never look for line endings in them.
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.ico binary
+*.pdf binary
+*.npy binary
+*.index binary
+*.faiss binary
