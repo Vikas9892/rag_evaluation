@@ -522,6 +522,13 @@ export interface components {
             created_at: string;
             /** Updated At */
             updated_at: string;
+            /**
+             * Timings Ms
+             * @description Milliseconds per indexing stage, present once a document is READY. Parsing, chunking, embedding and indexing were always measured; this is where a user can see them.
+             */
+            timings_ms?: {
+                [key: string]: number;
+            } | null;
         };
         /** EvaluationResponse */
         EvaluationResponse: {

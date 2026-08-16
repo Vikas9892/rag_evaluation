@@ -135,6 +135,43 @@ describe("WorkspacePanel", () => {
       renderPanel();
       expect(await screen.findByText("READY")).toBeInTheDocument();
     });
+
+    it("says where the indexing time went", async () => {
+      // Embedding dominates, and a user who waited should be able to see that
+      // without reading a server log.
+      getDocuments.mockResolvedValue({
+        documents: [
+          doc({
+            timings_ms: { parse: 120.4, chunk: 8.2, embed: 1240.7, index: 45.1 },
+          }),
+        ],
+      });
+      renderPanel();
+
+      expect(await screen.findByText(/Indexed in 1.4 s/)).toBeInTheDocument();
+      expect(screen.getByText(/embed 1.2 s/)).toBeInTheDocument();
+      expect(screen.getByText(/parse 120 ms/)).toBeInTheDocument();
+    });
+
+    it("omits the breakdown for a document indexed before it was recorded", async () => {
+      // Older rows have no timings; an empty "Indexed in" line would imply the
+      // work took no time at all.
+      getDocuments.mockResolvedValue({ documents: [doc({ timings_ms: null })] });
+      renderPanel();
+
+      await screen.findByText("handbook.pdf");
+      expect(screen.queryByText(/Indexed in/)).not.toBeInTheDocument();
+    });
+
+    it("does not claim a time while the document is still indexing", async () => {
+      getDocuments.mockResolvedValue({
+        documents: [doc({ status: "EMBEDDING", timings_ms: { parse: 120 } })],
+      });
+      renderPanel();
+
+      await screen.findByText("handbook.pdf");
+      expect(screen.queryByText(/Indexed in/)).not.toBeInTheDocument();
+    });
   });
 
   describe("failures", () => {

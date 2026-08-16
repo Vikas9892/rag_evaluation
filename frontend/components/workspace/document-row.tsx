@@ -23,6 +23,18 @@ function formatSize(bytes: number): string {
   return `${(bytes / 1024 / 1024).toFixed(1)} MB`;
 }
 
+/** The worker's stages in pipeline order, so the breakdown reads as a sequence. */
+const TIMED_STAGES: { key: string; label: string }[] = [
+  { key: "parse", label: "parse" },
+  { key: "chunk", label: "chunk" },
+  { key: "embed", label: "embed" },
+  { key: "index", label: "index" },
+];
+
+function formatMs(ms: number): string {
+  return ms >= 1000 ? `${(ms / 1000).toFixed(1)} s` : `${Math.round(ms)} ms`;
+}
+
 export function DocumentRow({
   document,
   corpusId,
@@ -85,12 +97,39 @@ export function DocumentRow({
       */}
       {!ready && !failed ? <Stages status={document.status} /> : null}
 
+      {/*
+        Where the wait went. The stage costs were measured all along and only
+        logged, so the one place indexing time was visible was a server log the
+        person who waited for it cannot read.
+      */}
+      {ready && document.timings_ms ? <Timings timings={document.timings_ms} /> : null}
+
       {failed ? (
         <p className="text-destructive mt-3 text-sm" role="alert">
           {document.error ?? "Indexing failed."}
         </p>
       ) : null}
     </li>
+  );
+}
+
+function Timings({ timings }: { timings: Record<string, number> }) {
+  const stages = TIMED_STAGES.filter(({ key }) => typeof timings[key] === "number");
+  if (stages.length === 0) return null;
+
+  const total = stages.reduce((sum, { key }) => sum + timings[key], 0);
+
+  return (
+    <p className="text-muted-foreground mt-3 font-mono text-xs">
+      <span className="text-foreground">Indexed in {formatMs(total)}</span>
+      {" — "}
+      {stages.map(({ key, label }, index) => (
+        <span key={key}>
+          {index > 0 ? " · " : null}
+          {label} {formatMs(timings[key])}
+        </span>
+      ))}
+    </p>
   );
 }
 
