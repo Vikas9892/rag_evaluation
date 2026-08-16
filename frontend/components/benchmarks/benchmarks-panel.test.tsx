@@ -1,5 +1,6 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { render, screen, within } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import type { ReactNode } from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -37,6 +38,28 @@ const DISCRIMINATING: BenchmarkResponse = {
   cached: true,
   discriminating: true,
   cells: [cell("dense", 5, 1.0), cell("hybrid", 5, 0.9133), cell("sparse", 5, 0.8056)],
+};
+
+function slow(
+  retriever: BenchmarkCell["retriever"],
+  mrr: number,
+  latency: number,
+  reranker = false,
+): BenchmarkCell {
+  const base = cell(retriever, 5, mrr, reranker);
+  return {
+    ...base,
+    metrics: { ...base.metrics, avg_latency_ms: latency, p50_latency_ms: latency },
+  };
+}
+
+/** Reranking wins on quality by a hair and costs 840 ms. */
+const TRADE_OFF: BenchmarkResponse = {
+  dataset_size: 53,
+  pending: 0,
+  cached: true,
+  discriminating: true,
+  cells: [slow("dense", 0.9, 60), slow("hybrid", 0.905, 900, true)],
 };
 
 const FLAT: BenchmarkResponse = {
@@ -138,5 +161,117 @@ describe("BenchmarksPanel", () => {
     getBenchmarks.mockRejectedValue(new Error("boom"));
     renderPanel();
     expect(await screen.findByRole("alert")).toBeInTheDocument();
+  });
+
+  describe("the recommendation", () => {
+    it("prefers the cheaper configuration when the quality gap is noise", async () => {
+      // The highest MRR is not automatically the answer: 0.005 more MRR for
+      // 840 ms is not a trade to make in an interactive box.
+      getBenchmarks.mockResolvedValue(TRADE_OFF);
+      renderPanel();
+
+      const card = (await screen.findByText(/Recommended configuration/)).closest(
+        "[data-slot='card']",
+      )!;
+      expect(within(card as HTMLElement).getByText(/Ship/)).toHaveTextContent(
+        "dense · top-5",
+      );
+    });
+
+    it("states what the more accurate configuration would cost", async () => {
+      getBenchmarks.mockResolvedValue(TRADE_OFF);
+      renderPanel();
+
+      expect(await screen.findByText(/840 ms more per query/)).toBeInTheDocument();
+    });
+
+    it("says there is no trade when the best is also the cheapest", async () => {
+      renderPanel();
+      expect(await screen.findByText(/no trade to make/i)).toBeInTheDocument();
+    });
+
+    it("recommends nothing from a sweep that is still running", async () => {
+      // Recommending from a partial matrix means revising it as cells land.
+      getBenchmarks.mockResolvedValue({ ...DISCRIMINATING, pending: 4 });
+      renderPanel();
+
+      await screen.findByText(/Measuring/);
+      expect(screen.queryByText(/Recommended configuration/)).toBeNull();
+    });
+
+    it("recommends nothing when no configuration is distinguishable", async () => {
+      getBenchmarks.mockResolvedValue(FLAT);
+      renderPanel();
+
+      await screen.findByText(/Every configuration scored the same/);
+      expect(screen.queryByText(/Recommended configuration/)).toBeNull();
+    });
+  });
+
+  describe("sorting the matrix", () => {
+    const matrixRows = () =>
+      within(screen.getByRole("table")).getAllByRole("row").slice(1);
+
+    it("opens on MRR descending rather than in sweep order", async () => {
+      renderPanel();
+      await screen.findByRole("table");
+
+      expect(within(matrixRows()[0]).getByText("dense")).toBeInTheDocument();
+      expect(screen.getByRole("columnheader", { name: /MRR/ })).toHaveAttribute(
+        "aria-sort",
+        "descending",
+      );
+    });
+
+    it("sorts by a column when its header is clicked", async () => {
+      renderPanel();
+      await screen.findByRole("table");
+
+      await userEvent.click(screen.getByRole("button", { name: /Latency/ }));
+
+      expect(screen.getByRole("columnheader", { name: /Latency/ })).toHaveAttribute(
+        "aria-sort",
+        "ascending",
+      );
+    });
+
+    it("reverses when the same header is clicked twice", async () => {
+      renderPanel();
+      await screen.findByRole("table");
+
+      const header = screen.getByRole("button", { name: /Recall/ });
+      await userEvent.click(header);
+      await userEvent.click(header);
+
+      expect(screen.getByRole("columnheader", { name: /Recall/ })).toHaveAttribute(
+        "aria-sort",
+        "ascending",
+      );
+    });
+
+    it("announces which column is not sorted", async () => {
+      // aria-sort is how a screen reader learns the table is sorted at all.
+      renderPanel();
+      await screen.findByRole("table");
+
+      expect(screen.getByRole("columnheader", { name: /Hit rate/ })).toHaveAttribute(
+        "aria-sort",
+        "none",
+      );
+    });
+
+    it("leaves the chart's order alone when the table is sorted", async () => {
+      // The chart and the table read the same cached array.
+      renderPanel();
+      await screen.findByRole("table");
+
+      await userEvent.click(screen.getByRole("button", { name: /Latency/ }));
+
+      const chart = screen
+        .getByText(/MRR by configuration/)
+        .closest("[data-slot='card']")!;
+      const first = within(chart as HTMLElement).getAllByRole("listitem")[0];
+      expect(first).toHaveTextContent("dense · top-5");
+    });
   });
 });

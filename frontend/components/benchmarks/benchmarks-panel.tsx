@@ -1,5 +1,8 @@
 "use client";
 
+import { ArrowUpIcon } from "lucide-react";
+import { useState } from "react";
+
 import { ErrorState } from "@/components/error-state";
 import { ms, ratio } from "@/components/metric-tile";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -14,11 +17,16 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { useBenchmarks } from "@/hooks/use-platform";
+import {
+  configurationLabel as label,
+  nextSort,
+  recommend,
+  sortCells,
+  type Sort,
+  type SortKey,
+} from "@/lib/benchmark-table";
 import { cn } from "@/lib/utils";
 import type { BenchmarkCell, BenchmarkResponse } from "@/types/api";
-
-const label = (cell: BenchmarkCell) =>
-  `${cell.retriever} · top-${cell.top_k}${cell.reranker ? " · reranked" : ""}`;
 
 /**
  * Every retriever at every top-K, measured on the same questions.
@@ -58,6 +66,8 @@ export function BenchmarksPanel() {
       ) : null}
 
       <Verdict data={data} ranked={ranked} />
+
+      <Recommendation data={data} />
 
       <Card>
         <CardHeader>
@@ -117,6 +127,60 @@ function Verdict({ data, ranked }: { data: BenchmarkResponse; ranked: BenchmarkC
 }
 
 /**
+ * Which configuration to ship, and what the choice costs.
+ *
+ * The highest MRR is not automatically the answer. Reranking wins on quality
+ * and costs hundreds of milliseconds against a generation step of 300-600 ms,
+ * so this names two configurations — the best outright, and the cheapest one
+ * that is not meaningfully worse — and states the trade between them rather
+ * than crowning a winner and leaving the cost unmentioned.
+ */
+function Recommendation({ data }: { data: BenchmarkResponse }) {
+  // Recommending from a partial sweep would mean revising the recommendation
+  // as the remaining cells land.
+  if (data.pending > 0 || !data.discriminating) return null;
+
+  const rec = recommend(data.cells);
+  if (!rec) return null;
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle>Recommended configuration</CardTitle>
+      </CardHeader>
+      <CardContent className="space-y-2 text-sm">
+        {rec.agreed ? (
+          <p>
+            <strong className="font-medium">{label(rec.best)}</strong> is both the most
+            accurate and the cheapest of the configurations within{" "}
+            {rec.tolerance.toFixed(2)} MRR of the best, so there is no trade to make here.
+          </p>
+        ) : (
+          <>
+            <p>
+              Ship <strong className="font-medium">{label(rec.value)}</strong>. It is the
+              fastest configuration within {rec.tolerance.toFixed(2)} MRR of the best, at{" "}
+              {ms(rec.value.metrics.avg_latency_ms)} per query.
+            </p>
+            <p className="text-muted-foreground">
+              {label(rec.best)} scores {ratio(rec.best.metrics.mrr)} against{" "}
+              {ratio(rec.value.metrics.mrr)} — {rec.extraMrr.toFixed(3)} more MRR for{" "}
+              {ms(rec.extraLatencyMs)} more per query. Worth it when a wrong answer is
+              expensive; not worth it in an interactive box.
+            </p>
+          </>
+        )}
+        <p className="text-muted-foreground text-xs">
+          The {rec.tolerance.toFixed(2)} MRR band is a judgement, not a significance test:
+          on {data.dataset_size} questions, one moving from rank 2 to rank 1 shifts MRR by
+          about 0.009, so smaller gaps are read as noise.
+        </p>
+      </CardContent>
+    </Card>
+  );
+}
+
+/**
  * One series, one unit, one axis.
  *
  * A bar chart is legitimate here in a way it was not for the retrieval trace:
@@ -149,7 +213,23 @@ function MrrChart({ ranked }: { ranked: BenchmarkCell[] }) {
   );
 }
 
+/** The sortable columns, and what each header says. */
+const COLUMNS: { key: SortKey; label: string; className?: string }[] = [
+  { key: "configuration", label: "Retriever" },
+  { key: "top_k", label: "K", className: "w-16" },
+  { key: "precision_at_k", label: "Precision@K", className: "w-28" },
+  { key: "recall_at_k", label: "Recall", className: "w-24" },
+  { key: "mrr", label: "MRR", className: "w-24" },
+  { key: "hit_rate", label: "Hit rate", className: "w-24" },
+  { key: "avg_latency_ms", label: "Latency", className: "w-28" },
+];
+
 function Matrix({ data, best }: { data: BenchmarkResponse; best?: BenchmarkCell }) {
+  // Opens on MRR descending: the matrix exists to answer "which is best", and
+  // the API's own order is the sweep order, which answers nothing.
+  const [sort, setSort] = useState<Sort>({ key: "mrr", direction: "desc" });
+  const rows = sortCells(data.cells, sort);
+
   return (
     <div className="overflow-x-auto">
       <Table>
@@ -160,18 +240,43 @@ function Matrix({ data, best }: { data: BenchmarkResponse; best?: BenchmarkCell 
         </TableCaption>
         <TableHeader>
           <TableRow>
-            <TableHead>Retriever</TableHead>
-            <TableHead className="w-16">K</TableHead>
+            {COLUMNS.map((column) => (
+              <TableHead
+                key={column.key}
+                className={column.className}
+                // Announced to a screen reader, which otherwise has no way to
+                // know the table is sorted or by what.
+                aria-sort={
+                  sort.key === column.key
+                    ? sort.direction === "asc"
+                      ? "ascending"
+                      : "descending"
+                    : "none"
+                }
+              >
+                <button
+                  type="button"
+                  onClick={() => setSort((current) => nextSort(current, column.key))}
+                  className="hover:text-foreground flex items-center gap-1"
+                >
+                  {column.label}
+                  {sort.key === column.key ? (
+                    <ArrowUpIcon
+                      aria-hidden
+                      className={cn(
+                        "size-3 transition-transform",
+                        sort.direction === "desc" && "rotate-180",
+                      )}
+                    />
+                  ) : null}
+                </button>
+              </TableHead>
+            ))}
             <TableHead className="w-24">Rerank</TableHead>
-            <TableHead className="w-28">Precision@K</TableHead>
-            <TableHead className="w-24">Recall</TableHead>
-            <TableHead className="w-24">MRR</TableHead>
-            <TableHead className="w-24">Hit rate</TableHead>
-            <TableHead className="w-28">Latency</TableHead>
           </TableRow>
         </TableHeader>
         <TableBody>
-          {data.cells.map((cell) => {
+          {rows.map((cell) => {
             const isBest = best && label(cell) === label(best);
             return (
               <TableRow key={label(cell)}>
@@ -182,9 +287,6 @@ function Matrix({ data, best }: { data: BenchmarkResponse; best?: BenchmarkCell 
                   ) : null}
                 </TableCell>
                 <TableCell className="font-mono text-sm">{cell.top_k}</TableCell>
-                <TableCell className="text-muted-foreground text-sm">
-                  {cell.reranker ? "on" : "off"}
-                </TableCell>
                 <TableCell className="font-mono text-sm">
                   {ratio(cell.metrics.precision_at_k)}
                 </TableCell>
@@ -199,6 +301,9 @@ function Matrix({ data, best }: { data: BenchmarkResponse; best?: BenchmarkCell 
                 </TableCell>
                 <TableCell className="text-muted-foreground font-mono text-xs">
                   {ms(cell.metrics.avg_latency_ms)}
+                </TableCell>
+                <TableCell className="text-muted-foreground text-sm">
+                  {cell.reranker ? "on" : "off"}
                 </TableCell>
               </TableRow>
             );
