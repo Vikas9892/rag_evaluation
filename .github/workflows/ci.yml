@@ -38,6 +38,56 @@ jobs:
       - name: Black
         run: python -m black --check .
 
+  # The frontend was local-only until now, which is how a committed file sat
+  # failing `prettier --check` for days and how 359 tests came to depend on
+  # somebody remembering to run them. Every backend failure this project has
+  # had in CI shared that shape: a check that only ran where it could not fail.
+  frontend:
+    name: "Frontend"
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      # `ci`, not `install`: it installs the lockfile exactly and fails if
+      # package.json has drifted from it, which is the check worth having here.
+      - name: Install dependencies
+        run: npm ci
+
+      # Regenerates the Next.js route types first, as `npm run typecheck` does
+      # locally — without them tsc fails on a clean checkout.
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Format
+        run: npm run format:check
+
+      - name: Unit tests
+        run: npm run test
+
+      - name: Build
+        run: npm run build
+
+      # The end-to-end suite is deliberately absent. It drives a real browser
+      # against a real API and a real index, so it would need the model weights
+      # and both servers running — the Python job's setup, plus Playwright's, to
+      # re-cover ground the unit suite already holds. It stays a local gate,
+      # documented in the README.
+
   test:
     name: "Python ${{ matrix.python-version }}"
     runs-on: ubuntu-latest
