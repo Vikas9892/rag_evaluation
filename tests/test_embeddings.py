@@ -8,9 +8,10 @@ import pytest
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from chunking.chunk import Chunk
-from embeddings.embedder import Embedder
+from embeddings.embedder import Embedder, shared_embedder
 from embeddings.service import EmbeddingService
 from embeddings.storage import VectorStorage
+import types
 
 
 # ---------------------------------------------------------------------------
@@ -280,3 +281,87 @@ class TestVectorStorage:
         for i, (chunk, rec) in enumerate(zip(chunks, records)):
             assert rec["chunk_id"] == chunk.chunk_id
             np.testing.assert_array_equal(loaded_vecs[i], vecs[i])
+
+
+class TestSharedEmbedder:
+    """One embedding model per process, not one per corpus.
+
+    A service is cached per corpus and the indexing worker runs alongside them.
+    Each constructing its own Embedder meant several identical copies of ~130 MB
+    of weights resident at once, and several seconds of load time each.
+    """
+
+    def setup_method(self):
+        shared_embedder.cache_clear()
+
+    def teardown_method(self):
+        shared_embedder.cache_clear()
+
+    def test_repeated_calls_return_the_same_instance(self, monkeypatch):
+        loads = []
+
+        class FakeModel:
+            def __init__(self, name, device=None):
+                loads.append(name)
+
+            def get_embedding_dimension(self):
+                return 384
+
+        monkeypatch.setattr("embeddings.embedder.SentenceTransformer", FakeModel)
+
+        first = shared_embedder()
+        second = shared_embedder()
+
+        assert first is second
+        assert len(loads) == 1, f"model loaded {len(loads)} times"
+
+    def test_a_different_model_is_not_shared(self, monkeypatch):
+        # Keyed rather than a bare singleton: a caller asking for another model
+        # must not silently receive the first one.
+        class FakeModel:
+            def __init__(self, name, device=None):
+                self.name = name
+
+            def get_embedding_dimension(self):
+                return 384
+
+        monkeypatch.setattr("embeddings.embedder.SentenceTransformer", FakeModel)
+
+        assert shared_embedder("model-a") is not shared_embedder("model-b")
+
+    def test_retriever_uses_the_shared_model(self, monkeypatch):
+        # The duplication this exists to prevent lived here: Retriever.from_disk
+        # passes no embedder, so every corpus built its own.
+        class FakeModel:
+            def __init__(self, name, device=None):
+                pass
+
+            def get_embedding_dimension(self):
+                return 384
+
+        monkeypatch.setattr("embeddings.embedder.SentenceTransformer", FakeModel)
+
+        from retrieval.retriever import Retriever
+
+        store = types.SimpleNamespace(ntotal=0)
+        one = Retriever(store=store, metadata=[])
+        two = Retriever(store=store, metadata=[])
+
+        assert one._embedder is two._embedder is shared_embedder()
+
+    def test_an_explicit_embedder_still_wins(self, monkeypatch):
+        class FakeModel:
+            def __init__(self, name, device=None):
+                pass
+
+            def get_embedding_dimension(self):
+                return 384
+
+        monkeypatch.setattr("embeddings.embedder.SentenceTransformer", FakeModel)
+
+        from retrieval.retriever import Retriever
+
+        injected = Embedder()
+        retriever = Retriever(store=types.SimpleNamespace(ntotal=0), metadata=[], embedder=injected)
+
+        assert retriever._embedder is injected

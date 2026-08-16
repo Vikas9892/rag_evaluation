@@ -6,7 +6,7 @@ from typing import List, Tuple
 from config.logging_config import get_logger
 from config.settings import FAISS_INDEX_FILE, METADATA_FILE, TOP_K
 from chunking.chunk import Chunk
-from embeddings.embedder import Embedder
+from embeddings.embedder import Embedder, shared_embedder
 
 from corpora import DEFAULT_CORPUS_ID, CorpusNotFoundError, corpus_layout
 
@@ -33,7 +33,9 @@ class Retriever:
     ) -> None:
         self._store = store
         self._metadata = metadata
-        self._embedder = embedder if embedder is not None else Embedder()
+        # Shared rather than constructed: one service is cached per corpus, and
+        # each building its own model meant N copies of identical weights.
+        self._embedder = embedder if embedder is not None else shared_embedder()
 
     # ------------------------------------------------------------------
     # Factory

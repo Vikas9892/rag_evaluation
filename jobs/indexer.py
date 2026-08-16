@@ -19,7 +19,7 @@ from chunking.splitter import DocumentSplitter
 from config.logging_config import get_logger
 from corpora import corpus_layout
 from documents import DocumentRepository, DocumentStatus
-from embeddings.embedder import Embedder
+from embeddings.embedder import Embedder, shared_embedder
 from embeddings.storage import VectorStorage
 from ingestion.cleaner import TextCleaner
 from ingestion.document import Document as ParsedDocument
@@ -105,7 +105,13 @@ class DocumentIndexer:
             return
 
         self._repo.set_status(
-            job.document_id, DocumentStatus.READY, chunk_count=len(chunks)
+            job.document_id,
+            DocumentStatus.READY,
+            chunk_count=len(chunks),
+            # Recorded on the document rather than only in the log. The cost of
+            # indexing is the thing a user waited for, and a server log is not
+            # somewhere they can look.
+            timings_ms={t.stage: round(t.ms, 1) for t in timings},
         )
         if self._on_indexed is not None:
             self._on_indexed(job.corpus_id)
@@ -186,7 +192,7 @@ class DocumentIndexer:
         self._repo.set_status(job.document_id, DocumentStatus.EMBEDDING)
         t0 = time.perf_counter()
 
-        embedder = self._embedder or Embedder()
+        embedder = self._embedder or shared_embedder()
         vectors = embedder.embed_many([c.text for c in chunks])
 
         timings.append(StageTiming("embed", (time.perf_counter() - t0) * 1000))

@@ -7,7 +7,7 @@ from config.logging_config import get_logger
 from config.settings import BATCH_SIZE
 from chunking.chunk import Chunk
 
-from .embedder import Embedder
+from .embedder import Embedder, shared_embedder
 
 logger = get_logger(__name__)
 
@@ -25,7 +25,7 @@ class EmbeddingService:
         embedder: Embedder | None = None,
         batch_size: int = BATCH_SIZE,
     ) -> None:
-        self.embedder = embedder if embedder is not None else Embedder()
+        self.embedder = embedder if embedder is not None else shared_embedder()
         self.batch_size = batch_size
 
     def embed_chunks(self, chunks: List[Chunk]) -> np.ndarray:

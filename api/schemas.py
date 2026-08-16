@@ -354,6 +354,14 @@ class DocumentResponse(BaseModel):
     )
     created_at: str
     updated_at: str
+    timings_ms: Optional[Dict[str, float]] = Field(
+        default=None,
+        description=(
+            "Milliseconds per indexing stage, present once a document is READY. "
+            "Parsing, chunking, embedding and indexing were always measured; this "
+            "is where a user can see them."
+        ),
+    )
 
 
 class DocumentCreateResponse(BaseModel):

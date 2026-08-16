@@ -31,6 +31,40 @@ export function apiBaseUrl(): string {
   return (process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000").replace(/\/+$/, "");
 }
 
+/**
+ * Turn FastAPI's validation payload into a sentence.
+ *
+ * A 422 body is a list of objects, not a string, so rendering it directly puts
+ * "[object Object]" in front of the user. The field and the reason are both in
+ * there — "top_k: Input should be less than or equal to 20" is something a
+ * person can act on, where "1 validation error(s)" is not.
+ */
+function summariseValidation(detail: readonly unknown[]): string | undefined {
+  const messages = detail
+    .map((item) => {
+      if (!item || typeof item !== "object") return null;
+      const { loc, msg } = item as { loc?: unknown; msg?: unknown };
+      if (typeof msg !== "string") return null;
+      // loc is ["body", "top_k"] or ["query", "chunk_size"]; the field is the
+      // last segment, and the first only says where it arrived.
+      const field = Array.isArray(loc)
+        ? loc
+            .filter(
+              (part) => typeof part === "string" && part !== "body" && part !== "query",
+            )
+            .pop()
+        : undefined;
+      return field ? `${field}: ${msg}` : msg;
+    })
+    .filter((message): message is string => message !== null);
+
+  // An unrecognised shape falls back to the count rather than to nothing: the
+  // user still learns the request was rejected for being malformed.
+  if (messages.length === 0)
+    return detail.length ? `${detail.length} validation error(s)` : undefined;
+  return messages.join("; ");
+}
+
 /** Pull FastAPI's `detail` out of an error body without assuming it is there. */
 async function readDetail(response: Response): Promise<string | undefined> {
   try {
@@ -38,9 +72,7 @@ async function readDetail(response: Response): Promise<string | undefined> {
     if (body && typeof body === "object" && "detail" in body) {
       const { detail } = body as { detail: unknown };
       if (typeof detail === "string") return detail;
-      // 422 returns a list of validation objects; summarise rather than
-      // rendering "[object Object]" at the user.
-      if (Array.isArray(detail)) return `${detail.length} validation error(s)`;
+      if (Array.isArray(detail)) return summariseValidation(detail);
     }
   } catch {
     // Body was empty or not JSON — the status alone has to carry the meaning.

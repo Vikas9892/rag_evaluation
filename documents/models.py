@@ -3,7 +3,7 @@
 from dataclasses import asdict, dataclass, field
 from datetime import datetime, timezone
 from enum import Enum
-from typing import Optional
+from typing import Dict, Optional
 
 
 class DocumentStatus(str, Enum):
@@ -69,6 +69,11 @@ class Document:
     stored_path: Optional[str] = None
     #: Hash of the file's bytes, so the same upload twice is recognisable.
     content_sha256: Optional[str] = None
+    #: Milliseconds per pipeline stage, written when indexing succeeds.
+    #: Measured all along and only ever logged, which meant the one place the
+    #: cost of indexing was visible was a server log nobody reading the
+    #: workspace can see.
+    timings_ms: Optional[Dict[str, float]] = None
     created_at: str = field(default_factory=_now)
     updated_at: str = field(default_factory=_now)
 

@@ -166,6 +166,44 @@ class TestIndexingPipeline:
         assert stored.status is DocumentStatus.READY
         assert stored.chunk_count > 0
 
+    def test_records_what_each_stage_cost(self, repo, tmp_path, corpus):
+        """The stages were always timed and the numbers only ever logged.
+
+        A user waited for indexing; a server log is not somewhere they can look.
+        """
+        doc = upload(repo, tmp_path, corpus, SAMPLE)
+        DocumentIndexer(repo, embedder=FakeEmbedder()).handle(
+            IndexingJob(job_id="j", document_id=doc.document_id, corpus_id=corpus)
+        )
+
+        timings = repo.get(doc.document_id).timings_ms
+        assert set(timings) == {"parse", "chunk", "embed", "index"}
+        assert all(value >= 0 for value in timings.values())
+
+    def test_a_failed_document_records_no_timings(self, repo, tmp_path, corpus):
+        # Partial timings for a document that never finished would read as a
+        # cost that bought something.
+        doc = upload(repo, tmp_path, corpus, "   ")
+        DocumentIndexer(repo, embedder=FakeEmbedder()).handle(
+            IndexingJob(job_id="j", document_id=doc.document_id, corpus_id=corpus)
+        )
+
+        stored = repo.get(doc.document_id)
+        assert stored.status is DocumentStatus.FAILED
+        assert stored.timings_ms is None
+
+    def test_timings_survive_a_reopen(self, repo, tmp_path, corpus):
+        # They are JSON in a TEXT column; a round trip through SQLite must give
+        # back numbers rather than a string.
+        doc = upload(repo, tmp_path, corpus, SAMPLE)
+        DocumentIndexer(repo, embedder=FakeEmbedder()).handle(
+            IndexingJob(job_id="j", document_id=doc.document_id, corpus_id=corpus)
+        )
+
+        reopened = DocumentRepository(repo.db_path)
+        timings = reopened.get(doc.document_id).timings_ms
+        assert isinstance(timings["parse"], float)
+
     def test_writes_into_the_named_corpus_only(self, repo, tmp_path, corpus):
         # The isolation guarantee, at the index level.
         doc = upload(repo, tmp_path, corpus, SAMPLE)

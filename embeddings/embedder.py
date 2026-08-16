@@ -1,3 +1,4 @@
+from functools import lru_cache
 from typing import List
 
 import numpy as np
@@ -55,3 +56,26 @@ class Embedder:
             convert_to_numpy=True,
             show_progress_bar=False,
         )
+
+
+@lru_cache(maxsize=4)
+def shared_embedder(
+    model_name: str = EMBEDDING_MODEL, device: str = DEVICE
+) -> Embedder:
+    """The process's embedding model, loaded once.
+
+    bge-small is ~130 MB of weights and several seconds to load. Every retriever
+    and the indexing worker used to construct their own, so a process serving
+    eight corpora held eight identical copies of the same model — around a
+    gigabyte of resident memory to do exactly what one copy does.
+
+    Keyed by model and device rather than a bare singleton, so a caller that
+    genuinely wants a different model still gets one; the cache is bounded
+    because those are the only axes that can vary.
+
+    Shared across threads: the indexing worker embeds while queries embed, and
+    SentenceTransformer inference is read-only over the model weights. That is
+    the same assumption every server that loads one model and serves concurrent
+    requests makes. Construct `Embedder()` directly to opt out.
+    """
+    return Embedder(model_name=model_name, device=device)

@@ -1,4 +1,4 @@
-import { HttpResponse, http, delay } from "msw";
+import { HttpResponse, http, delay, type JsonBodyType } from "msw";
 import { setupServer } from "msw/node";
 import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
 
@@ -145,7 +145,9 @@ describe("error mapping", () => {
       ),
     );
     const error = await expectApiError(postQuery("q"));
-    expect(error.detail).toBe("2 validation error(s)");
+    // The messages themselves, not a count of them: see the validation-error
+    // tests below for the field-qualified form FastAPI actually sends.
+    expect(error.detail).toBe("a; b");
   });
 
   it("falls back to its own message when the body has no detail", async () => {
@@ -269,5 +271,68 @@ describe("streamQuery", () => {
     const error = await expectApiError(collect());
     expect(error.kind).toBe("unavailable");
     expect(error.userMessage).toBe("GROQ_API_KEY is not set");
+  });
+});
+
+describe("validation errors", () => {
+  async function detailFor(body: JsonBodyType): Promise<string | undefined> {
+    server.use(
+      http.get(`${BASE}/health`, () => HttpResponse.json(body, { status: 422 })),
+    );
+    try {
+      await getHealth();
+    } catch (error) {
+      return (error as ApiError).detail;
+    }
+    return undefined;
+  }
+
+  it("names the field and the reason", async () => {
+    // Rendering the raw payload puts "[object Object]" in front of the user;
+    // a count tells them nothing they can act on.
+    const detail = await detailFor({
+      detail: [
+        {
+          type: "less_than_equal",
+          loc: ["body", "top_k"],
+          msg: "Input should be less than or equal to 20",
+        },
+      ],
+    });
+
+    expect(detail).toBe("top_k: Input should be less than or equal to 20");
+  });
+
+  it("drops the location prefix, which says nothing to a user", async () => {
+    const detail = await detailFor({
+      detail: [{ loc: ["query", "chunk_size"], msg: "Input should be >= 50" }],
+    });
+
+    expect(detail).toBe("chunk_size: Input should be >= 50");
+    expect(detail).not.toContain("query");
+  });
+
+  it("joins several failures rather than reporting only the first", async () => {
+    const detail = await detailFor({
+      detail: [
+        { loc: ["body", "top_k"], msg: "too large" },
+        { loc: ["body", "question"], msg: "too short" },
+      ],
+    });
+
+    expect(detail).toBe("top_k: too large; question: too short");
+  });
+
+  it("falls back to a count when the shape is not recognised", async () => {
+    // Still better than nothing: the user learns the request was malformed.
+    expect(await detailFor({ detail: [{ unexpected: true }] })).toBe(
+      "1 validation error(s)",
+    );
+  });
+
+  it("keeps a plain string detail as it is", async () => {
+    expect(await detailFor({ detail: "Corpus has no index yet." })).toBe(
+      "Corpus has no index yet.",
+    );
   });
 });

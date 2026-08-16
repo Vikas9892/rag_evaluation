@@ -8,6 +8,7 @@ The database holds records *about* documents. Chunks, vectors and indexes stay
 where they are, on disk under the corpus layout.
 """
 
+import json
 import sqlite3
 import threading
 from contextlib import contextmanager
@@ -34,12 +35,27 @@ CREATE TABLE IF NOT EXISTS documents (
     error           TEXT,
     stored_path     TEXT,
     content_sha256  TEXT,
+    timings_ms      TEXT,
     created_at      TEXT NOT NULL,
     updated_at      TEXT NOT NULL
 );
 CREATE INDEX IF NOT EXISTS documents_corpus_idx ON documents (corpus_id);
 CREATE INDEX IF NOT EXISTS documents_sha_idx ON documents (corpus_id, content_sha256);
 """
+
+
+#: Columns added after the table first shipped. CREATE TABLE IF NOT EXISTS
+#: leaves an existing database alone, so a column added to _SCHEMA above is
+#: absent from every database created before it and every query naming it
+#: fails — on a developer's machine and on a deployment that has been running.
+_ADDED_COLUMNS = {"timings_ms": "TEXT"}
+
+
+def _add_missing_columns(conn: sqlite3.Connection) -> None:
+    present = {row["name"] for row in conn.execute("PRAGMA table_info(documents)")}
+    for column, declaration in _ADDED_COLUMNS.items():
+        if column not in present:
+            conn.execute(f"ALTER TABLE documents ADD COLUMN {column} {declaration}")
 
 
 class DocumentRepository:
@@ -55,6 +71,7 @@ class DocumentRepository:
         self._local = threading.local()
         with self._connect() as conn:
             conn.executescript(_SCHEMA)
+            _add_missing_columns(conn)
 
     @contextmanager
     def _connect(self) -> Iterator[sqlite3.Connection]:
@@ -107,6 +124,7 @@ class DocumentRepository:
         *,
         error: Optional[str] = None,
         chunk_count: Optional[int] = None,
+        timings_ms: Optional[dict] = None,
     ) -> None:
         """Advance a document's stage.
 
@@ -125,6 +143,10 @@ class DocumentRepository:
         if chunk_count is not None:
             fields.append("chunk_count = ?")
             values.append(chunk_count)
+
+        if timings_ms is not None:
+            fields.append("timings_ms = ?")
+            values.append(json.dumps(timings_ms))
 
         values.append(document_id)
         with self._connect() as conn:
@@ -215,6 +237,7 @@ def _to_document(row: sqlite3.Row) -> Document:
         error=row["error"],
         stored_path=row["stored_path"],
         content_sha256=row["content_sha256"],
+        timings_ms=json.loads(row["timings_ms"]) if row["timings_ms"] else None,
         created_at=row["created_at"],
         updated_at=row["updated_at"],
     )
