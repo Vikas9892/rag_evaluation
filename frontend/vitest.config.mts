@@ -12,7 +12,9 @@ export default defineConfig({
     globals: true,
     setupFiles: ["./vitest.setup.ts"],
     include: ["**/*.test.{ts,tsx}"],
-    exclude: ["node_modules/**", ".next/**"],
+    // e2e/ is Playwright: it needs a real browser and a running API, so it
+    // must not be swept up by the unit runner.
+    exclude: ["node_modules/**", ".next/**", "e2e/**"],
     coverage: {
       provider: "v8",
       reporter: ["text", "lcov"],

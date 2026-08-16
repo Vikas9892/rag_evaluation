@@ -27,3 +27,8 @@ index/documents.db-shm
 index/documents.db-wal
 data/processed/
 reports/
+
+# Playwright artefacts
+frontend/test-results/
+frontend/playwright-report/
+frontend/blob-report/
