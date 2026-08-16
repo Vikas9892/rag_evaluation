@@ -84,9 +84,11 @@
 }
 
 .dark {
-  /* Charcoal, not black. Pure black raises contrast past comfortable for long
-     reading and makes every border either invisible or harsh. */
-  --background: oklch(0.185 0.006 260);
+  /* Black ground, with every surface above it kept where it was: cards at
+     0.225 and the sidebar at 0.205 now read as raised panels rather than as
+     slightly different shades of the same charcoal. Borders do the separating
+     where two dark surfaces meet. */
+  --background: oklch(0 0 0);
   --foreground: oklch(0.965 0 0);
   --card: oklch(0.225 0.006 260);
   --card-foreground: oklch(0.985 0 0);
