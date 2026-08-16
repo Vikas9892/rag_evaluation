@@ -343,8 +343,17 @@ done while CI had been red the entire time. The badge said so; nobody looked.
 | Duplicated test block | `71fa71d` | The last 82 lines of `test_chunking.py` repeated the preceding 82 verbatim; Python bound the later copy, so a whole test class was shadowed. Ruff's F811 surfaced it. |
 | Leaked SQLite connections | `7d62400` | 211 ResourceWarnings per run. `pytest` now errors on `unclosed database`. |
 | Ruff and black | `b9c60fb`, `3326ace` | 30 findings and 64 unformatted files. Both now configured and gated by a CI job, with pinned versions. |
+| Retrieval needed a Groq key | `76e1b81` | `/config`, `/evaluation` and `/benchmarks` resolved a RAGService and reached through it for `.retriever`, so all three answered 503 with no key — while `/evaluation`'s description says "No LLM calls are made". The whole Evaluation Lab was unreachable to anyone who had not signed up for Groq, to read numbers produced entirely by retrieval. |
+| Deleted documents stayed searchable | `21054d9` | DELETE removes the chunks in the index at that moment; a job already running writes its chunks *after*. Deleting during PARSING left 13 chunks against 0 document records — the workspace showed an empty knowledge base while queries answered from the deleted file. |
+| Deleted files stayed on disk | `b353c2b` | The unlink was attempted inside a try/except that logged and carried on, and the reply said "Document, file and chunks removed" either way. Windows refuses to unlink a file the indexer holds open, so the bytes survived a deletion the user was told had happened. |
+| One log file, 33 writers | `eca312d` | Every `get_logger` call built its own `RotatingFileHandler` over the same path, so rotation raced with itself. |
 
-Three of those five were invisible locally and only ever failed in CI. The
+The last three were found by driving the running API rather than by reading it
+— uploading a document and deleting it mid-index, then asking what was left on
+disk and in the corpus. None of them had a failing test, because each lived in a
+window the tests never opened.
+
+Three of the first five were invisible locally and only ever failed in CI. The
 common shape: a check that ran only where it could not fail. `GROQ_API_KEY` is
 set on this machine and unset on the runner, so the pre-push command is now
 

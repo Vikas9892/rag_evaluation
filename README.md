@@ -343,7 +343,7 @@ pytest tests/test_api.py -v
 pytest tests/test_hybrid_retriever.py -v
 ```
 
-**666 tests, 94% coverage**, gated at 85% in CI. The uncovered lines are
+**685 tests, 94% coverage**, gated at 85% in CI. The uncovered lines are
 real-API paths (`GroqGenerator`) that need a live key.
 
 > **Run it once the way CI does, before pushing.**

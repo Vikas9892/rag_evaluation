@@ -64,6 +64,22 @@ the same retriever the Evaluation Lab benchmarks.
   the preceding 82, so one copy never ran.
 - **Undefined forward reference** — `DocumentSplitter.from_config` was annotated
   with a quoted `"ChunkingConfig"` that was never imported.
+- **The retrieval surface required a Groq key.** `/config`, `/evaluation` and
+  `/benchmarks` each resolved a `RAGService` to reach its retriever, and
+  building one constructs the Groq client — so all three answered 503 without
+  `GROQ_API_KEY`, while `/evaluation`'s own description says "No LLM calls are
+  made". They depend on a retriever now, which is what they use.
+- **A document deleted while indexing stayed searchable.** DELETE removes the
+  chunks in the index at that moment; a job already in flight writes its chunks
+  afterwards. Deleting during PARSING left 13 chunks against 0 document
+  records. The worker re-checks the record after writing and discards the
+  chunks if it has gone.
+- **A deleted document's file stayed on disk** when the indexer still held it
+  open — which Windows refuses to unlink — while the response claimed
+  "Document, file and chunks removed" regardless. The reply now reports
+  `file_removed`, and the worker clears the file as it finishes.
+- **Log rotation raced with itself.** All 33 modules were given their own
+  `RotatingFileHandler` over one path.
 
 ### Changed
 

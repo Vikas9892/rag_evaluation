@@ -109,8 +109,8 @@ The suite grew rather than shrank — no test was deleted to make a change pass:
 
 | Check | Baseline | Now |
 |---|---|---|
-| Python tests | 453 | 666 |
-| Python coverage | 91% | 94%, and 93.7% without a Groq key (gate: 85%) |
+| Python tests | 453 | 685 |
+| Python coverage | 91% | 94%, and 93.5% without a Groq key (gate: 85%) |
 | Frontend unit tests | 224 | 359 (25 files) |
 | Frontend E2E tests | — | 5, against a real API and index |
 | CI | green | green — lint, Python 3.11, Python 3.12 |
