@@ -84,19 +84,25 @@ function ModeCard({
   return (
     <Link
       href={href}
-      className="border-border hover:bg-accent focus-visible:ring-ring group rounded-lg border p-5 transition-colors focus-visible:ring-2 focus-visible:outline-none"
+      className="group border-border bg-card hover:border-border-strong focus-visible:ring-ring relative flex flex-col rounded-lg border p-4 transition-colors focus-visible:ring-2 focus-visible:outline-none"
     >
-      <span className="flex items-center gap-2 text-base font-medium">
-        <Icon aria-hidden className="size-4" />
+      <span className="flex items-center gap-2 text-sm font-semibold">
+        <Icon aria-hidden className="text-primary size-4" />
         {title}
         <ArrowRightIcon
           aria-hidden
-          className="size-4 opacity-0 transition-opacity group-hover:opacity-60"
+          className="text-muted-foreground ml-auto size-3.5 opacity-0 transition-opacity group-hover:opacity-100"
         />
       </span>
       <span className="mt-2 block text-sm">{lead}</span>
-      <span className="text-muted-foreground mt-1 block text-sm">{detail}</span>
-      <span className="text-muted-foreground mt-3 block font-mono text-xs">{status}</span>
+      <span className="text-muted-foreground mt-1.5 block text-[13px] leading-snug">
+        {detail}
+      </span>
+      {/* The corpus state, in mono, because it is a measurement of this
+          deployment rather than a description of the feature. */}
+      <span className="border-border text-muted-foreground mt-3 block border-t pt-2.5 font-mono text-[11px]">
+        {status}
+      </span>
     </Link>
   );
 }

@@ -27,7 +27,7 @@ export function ThemeToggle({ className }: { className?: string }) {
   return (
     <div
       className={cn(
-        "border-border bg-muted/40 flex gap-0.5 rounded-lg border p-0.5",
+        "border-border bg-muted/40 flex gap-0.5 rounded-md border p-0.5",
         className,
       )}
       role="group"
@@ -43,13 +43,13 @@ export function ThemeToggle({ className }: { className?: string }) {
             aria-pressed={active}
             title={label}
             className={cn(
-              "focus-visible:ring-ring flex flex-1 items-center justify-center rounded-md py-1.5 transition-colors focus-visible:ring-2 focus-visible:outline-none",
+              "focus-visible:ring-ring flex size-6 flex-1 items-center justify-center rounded-sm transition-colors focus-visible:ring-2 focus-visible:outline-none",
               active
-                ? "bg-background text-foreground shadow-sm"
+                ? "bg-elevated text-foreground shadow-sm"
                 : "text-muted-foreground hover:text-foreground",
             )}
           >
-            <Icon aria-hidden className="size-4" />
+            <Icon aria-hidden className="size-3.5" />
             <span className="sr-only">{label}</span>
           </button>
         );

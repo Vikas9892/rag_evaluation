@@ -80,11 +80,26 @@ describe("WorkspacePanel", () => {
   });
 
   it("lists documents with their size and chunk count", async () => {
+    // Size and chunks are their own columns now, so they are separate cells
+    // rather than one run-on line.
     getDocuments.mockResolvedValue({ documents: [doc()] });
     renderPanel();
 
     expect(await screen.findByText("handbook.pdf")).toBeInTheDocument();
-    expect(screen.getByText(/2.3 MB · 148 chunks/)).toBeInTheDocument();
+    expect(screen.getByText("2.3 MB")).toBeInTheDocument();
+    expect(screen.getByText("148")).toBeInTheDocument();
+  });
+
+  it("gives the knowledge base real column headers", async () => {
+    // A table, not a list of cards: the point of a knowledge base is comparing
+    // documents down a column.
+    getDocuments.mockResolvedValue({ documents: [doc()] });
+    renderPanel();
+
+    await screen.findByText("handbook.pdf");
+    for (const header of ["Document", "Size", "Chunks", "Status"]) {
+      expect(screen.getByRole("columnheader", { name: header })).toBeInTheDocument();
+    }
   });
 
   it("states the accepted formats and the size limit up front", async () => {

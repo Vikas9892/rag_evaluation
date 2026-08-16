@@ -19,13 +19,20 @@ export function HealthIndicator() {
   const state = resolveState({ data, error, isPending });
 
   return (
-    <span className="flex items-center gap-2" title={state.title}>
+    <span
+      className="border-border bg-muted/40 flex items-center gap-1.5 rounded-md border px-2 py-1 text-xs"
+      title={state.title}
+    >
       <span
         aria-hidden
-        className={cn("size-2 rounded-full", state.dot)}
+        className={cn("size-1.5 rounded-full", state.dot)}
         data-testid="health-dot"
       />
-      <span className="text-muted-foreground" role="status">
+      {/* The word carries the state, the dot only reinforces it — a status
+          told in colour alone is no status at all. One node, not two: narrow
+          screens hide it visually rather than removing it, so there is never a
+          second live region announcing the same thing. */}
+      <span className="text-muted-foreground sr-only sm:not-sr-only" role="status">
         {state.label}
       </span>
     </span>
@@ -54,26 +61,26 @@ function resolveState({
     if (apiError?.kind === "network" || apiError?.kind === "timeout") {
       return {
         label: "API unreachable",
-        dot: "bg-red-500",
+        dot: "bg-destructive",
         title: apiError.userMessage,
       };
     }
     return {
       label: "Degraded",
-      dot: "bg-amber-500",
+      dot: "bg-warning",
       title: apiError?.userMessage ?? "The API responded with an error",
     };
   }
 
   if (data?.status === "healthy") {
-    return { label: "API healthy", dot: "bg-emerald-500", title: "API is responding" };
+    return { label: "API healthy", dot: "bg-success", title: "API is responding" };
   }
 
   // The endpoint answered with something other than "healthy" — report what it
   // said instead of translating it into a green light.
   return {
     label: data?.status ?? "Unknown",
-    dot: "bg-amber-500",
+    dot: "bg-warning",
     title: `API reported status: ${data?.status ?? "unknown"}`,
   };
 }

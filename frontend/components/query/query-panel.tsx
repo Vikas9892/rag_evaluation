@@ -89,7 +89,9 @@ export function QueryPanel() {
           onSubmit={ask}
         />
 
-        <div className="flex flex-wrap items-center gap-x-6 gap-y-3">
+        {/* A toolbar, not a scattered row of fields: these four decide what the
+            question is asked of, and they belong together above the result. */}
+        <div className="border-border bg-card flex flex-wrap items-center gap-x-5 gap-y-3 rounded-lg border px-3 py-2.5">
           {/*
             First, because it changes what every other control operates on:
             the retriever and top-K are settings, but the corpus is the subject.
@@ -283,7 +285,7 @@ function Result({
             screen reader, so the region is only read once it settles.
           */}
           <p
-            className="leading-relaxed whitespace-pre-wrap"
+            className="text-[15px] leading-[1.7] whitespace-pre-wrap"
             aria-live="polite"
             aria-busy={streaming}
           >
@@ -353,7 +355,11 @@ function Abstained() {
 
 function Metrics({ metrics }: { metrics: StreamDone }) {
   return (
-    <p className="text-muted-foreground text-xs">
+    // Deliberately one element, not a span per figure: this line is read as a
+    // single statement about the request, and splitting it would also break
+    // every assertion that reads "1187 ms total" as a phrase. The mono strip
+    // is what sets the numbers apart, not markup.
+    <p className="border-border text-muted-foreground border-t pt-3 font-mono text-[11px] tabular-nums">
       {Math.round(metrics.total_latency_ms)} ms total
       {metrics.first_token_latency_ms !== null
         ? ` · ${Math.round(metrics.first_token_latency_ms)} ms to first token`

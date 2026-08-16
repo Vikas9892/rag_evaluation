@@ -151,17 +151,58 @@ export function WorkspacePanel() {
               description="Upload a PDF, text or Markdown file above. It is parsed, chunked, embedded and indexed on a worker — the page keeps working while that happens."
             />
           ) : (
-            <ul className="space-y-3">
-              {list.map((document) => (
-                <DocumentRow
-                  key={document.document_id}
-                  document={document}
-                  corpusId={WORKSPACE_CORPUS}
-                  deleting={remove.isPending}
-                  onDelete={(id) => remove.mutate(id)}
-                />
-              ))}
-            </ul>
+            // Horizontally scrollable rather than reflowed: these columns are
+            // narrow already, and a card-per-document on mobile would lose the
+            // alignment that makes a knowledge base scannable.
+            // No negative margin here. Bleeding the scroller to the card's
+            // edges with -mx-4 widened it past the parent's content box, and
+            // the page itself then scrolled sideways by 255px at 390px wide —
+            // the scroll container has to sit inside its parent to contain
+            // anything.
+            <div className="overflow-x-auto">
+              {/* The 640px floor waits for lg, because the sidebar returns at
+                  md and leaves ~544px of content — narrower than the floor,
+                  which put 125px of sideways scroll on the page at 768px.
+                  Below lg the columns simply compress; table-fixed is what
+                  makes that safe. */}
+              <table className="w-full table-fixed border-collapse text-left lg:min-w-[640px]">
+                <thead>
+                  <tr className="border-border text-subtle-foreground border-b text-[11px] tracking-wider uppercase">
+                    {/* table-fixed: column widths come from these headers
+                        rather than from the content, so a long filename cannot
+                        widen the table past its container. Without it the
+                        table's intrinsic minimum let the whole page be dragged
+                        sideways on a phone. */}
+                    <th scope="col" className="py-2 pr-3 pl-3 font-medium">
+                      Document
+                    </th>
+                    <th scope="col" className="w-16 py-2 pr-3 text-right font-medium">
+                      Size
+                    </th>
+                    <th scope="col" className="w-16 py-2 pr-3 text-right font-medium">
+                      Chunks
+                    </th>
+                    <th scope="col" className="w-24 py-2 pr-3 font-medium">
+                      Status
+                    </th>
+                    <th scope="col" className="w-36 py-2 pr-3 text-right font-medium">
+                      <span className="sr-only">Actions</span>
+                    </th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {list.map((document) => (
+                    <DocumentRow
+                      key={document.document_id}
+                      document={document}
+                      corpusId={WORKSPACE_CORPUS}
+                      deleting={remove.isPending}
+                      onDelete={(id) => remove.mutate(id)}
+                    />
+                  ))}
+                </tbody>
+              </table>
+            </div>
           )}
 
           {remove.error ? (

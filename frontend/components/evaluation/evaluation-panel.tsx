@@ -1,10 +1,10 @@
 "use client";
 
-import { CheckIcon, XIcon } from "lucide-react";
+import { AlertTriangleIcon, CheckIcon, Loader2Icon, XIcon } from "lucide-react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 
 import { ErrorState } from "@/components/error-state";
-import { MetricTile, ms, ratio } from "@/components/metric-tile";
+import { Stat, ms, ratio } from "@/components/ui/stat";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { InlineField } from "@/components/ui/inline-field";
 import { Input } from "@/components/ui/input";
@@ -115,7 +115,7 @@ function RunControls({
   ) => void;
 }) {
   return (
-    <div className="flex flex-wrap items-center gap-x-6 gap-y-3">
+    <div className="border-border bg-card flex flex-wrap items-center gap-x-5 gap-y-3 rounded-lg border px-3 py-2.5">
       <InlineField htmlFor="eval-top-k" label="Chunks retrieved">
         <Input
           id="eval-top-k"
@@ -170,7 +170,11 @@ function RunControls({
       </InlineField>
 
       {running ? (
-        <span className="text-muted-foreground text-xs" role="status">
+        <span
+          className="text-muted-foreground ml-auto inline-flex items-center gap-2 text-xs"
+          role="status"
+        >
+          <Loader2Icon aria-hidden className="text-primary size-3.5 animate-spin" />
           Running over the dataset…
         </span>
       ) : null}
@@ -211,23 +215,23 @@ function Metrics({ data }: { data: EvaluationResponse }) {
   return (
     <div className="space-y-3">
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-        <MetricTile
+        <Stat
           label="Precision@K"
           value={ratio(m.precision_at_k)}
           // Without this the number reads as a failing grade. It is arithmetic.
           caption={`Capped near ${(1 / data.top_k).toFixed(2)} here: most questions have one relevant chunk and ${data.top_k} are retrieved.`}
         />
-        <MetricTile
+        <Stat
           label="Recall"
           value={ratio(m.recall_at_k)}
           caption="Share of the relevant chunks that were retrieved. The metric to read on this corpus."
         />
-        <MetricTile
+        <Stat
           label="MRR"
           value={ratio(m.mrr)}
           caption="How high the first relevant chunk ranks. 1.0 means always first."
         />
-        <MetricTile
+        <Stat
           label="Hit rate"
           value={ratio(m.hit_rate)}
           caption={`Questions with at least one relevant chunk in the top ${data.top_k}.`}
@@ -240,17 +244,17 @@ function Metrics({ data }: { data: EvaluationResponse }) {
         of this machine on this run.
       */}
       <div className="grid gap-3 sm:grid-cols-3">
-        <MetricTile
+        <Stat
           label="Median latency"
           value={ms(m.p50_latency_ms)}
           caption="Retrieval only. Generation is not measured here."
         />
-        <MetricTile
+        <Stat
           label="p95 latency"
           value={ms(m.p95_latency_ms)}
           caption="The slowest 1 in 20. The mean hides this, and this is what a waiting user meets."
         />
-        <MetricTile
+        <Stat
           label="Mean latency"
           value={ms(m.avg_latency_ms)}
           caption="Kept for comparison with the tail above, not as the headline."
@@ -294,9 +298,10 @@ function Failures({
   }
 
   return (
-    <Card>
+    <Card className="border-warning/30 bg-warning-subtle/40">
       <CardHeader>
-        <CardTitle>
+        <CardTitle className="flex items-center gap-2">
+          <AlertTriangleIcon aria-hidden className="text-warning size-4 shrink-0" />
           {missed.length} question{missed.length === 1 ? "" : "s"} retrieved nothing
           relevant
         </CardTitle>
@@ -365,9 +370,9 @@ function PerQuestion({ data, view }: { data: EvaluationResponse; view: Evaluatio
             <TableHead className="w-12">#</TableHead>
             <TableHead>Question</TableHead>
             <TableHead className="w-16">Hit</TableHead>
-            <TableHead className="w-20">RR</TableHead>
-            <TableHead className="w-24">Recall</TableHead>
-            <TableHead className="w-24">Latency</TableHead>
+            <TableHead className="w-20 text-right">RR</TableHead>
+            <TableHead className="w-24 text-right">Recall</TableHead>
+            <TableHead className="w-24 text-right">Latency</TableHead>
           </TableRow>
         </TableHeader>
         <TableBody>
@@ -380,7 +385,7 @@ function PerQuestion({ data, view }: { data: EvaluationResponse; view: Evaluatio
               <TableCell>
                 {q.hit ? (
                   <>
-                    <CheckIcon aria-hidden className="size-4" />
+                    <CheckIcon aria-hidden className="text-success size-4" />
                     <span className="sr-only">retrieved</span>
                   </>
                 ) : (
@@ -390,11 +395,13 @@ function PerQuestion({ data, view }: { data: EvaluationResponse; view: Evaluatio
                   </>
                 )}
               </TableCell>
-              <TableCell className="font-mono text-sm">
+              <TableCell className="text-right font-mono text-sm tabular-nums">
                 {ratio(q.reciprocal_rank)}
               </TableCell>
-              <TableCell className="font-mono text-sm">{ratio(q.recall)}</TableCell>
-              <TableCell className="text-muted-foreground font-mono text-xs">
+              <TableCell className="text-right font-mono text-sm tabular-nums">
+                {ratio(q.recall)}
+              </TableCell>
+              <TableCell className="text-muted-foreground text-right font-mono text-xs tabular-nums">
                 {ms(q.latency_ms)}
               </TableCell>
             </TableRow>

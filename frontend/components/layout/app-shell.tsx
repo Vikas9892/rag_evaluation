@@ -1,66 +1,14 @@
-import Link from "next/link";
 import type { ReactNode } from "react";
 
-import { ThemeToggle } from "@/components/theme/theme-toggle";
-
-import { HealthIndicator } from "./health-indicator";
-import { SidebarNav } from "./sidebar-nav";
+import { AppFrame } from "./app-frame";
 
 /**
- * Application chrome: sidebar, top bar and the main content region.
+ * Application chrome.
  *
- * A server component — it renders no interactive state of its own and only
- * composes the client nav island.
+ * A server component that composes the client frame, so `children` are still
+ * rendered on the server and only the shell's own layout state ships as JS
+ * (ADR 008).
  */
 export function AppShell({ children }: { children: ReactNode }) {
-  return (
-    <div className="flex min-h-full flex-1">
-      {/* Keyboard users land here first and can jump past the nav. */}
-      <a
-        href="#main"
-        className="bg-background focus:ring-ring sr-only focus:not-sr-only focus:absolute focus:top-2 focus:left-2 focus:z-50 focus:rounded-md focus:px-3 focus:py-2 focus:ring-2"
-      >
-        Skip to content
-      </a>
-
-      <aside className="bg-sidebar border-sidebar-border hidden w-60 shrink-0 flex-col border-r md:flex">
-        <div className="border-sidebar-border flex h-14 items-center border-b px-4">
-          <Link href="/" className="flex flex-col leading-tight">
-            <span className="text-sidebar-foreground text-sm font-semibold">
-              RAG Evaluation
-            </span>
-            <span className="text-muted-foreground text-xs">Platform</span>
-          </Link>
-        </div>
-        <SidebarNav />
-
-        {/* Pinned to the bottom of the sidebar: a preference, not a
-            destination, so it does not belong in the navigation list. */}
-        <div className="border-sidebar-border mt-auto border-t p-3">
-          <ThemeToggle />
-        </div>
-      </aside>
-
-      <div className="flex min-w-0 flex-1 flex-col">
-        <header className="border-border bg-background flex h-14 shrink-0 items-center gap-4 border-b px-4 md:px-6">
-          <Link href="/" className="text-sm font-semibold md:hidden">
-            RAG Evaluation
-          </Link>
-          <div className="ml-auto flex items-center gap-3 text-xs">
-            <HealthIndicator />
-            <ThemeToggle className="md:hidden" />
-          </div>
-        </header>
-
-        {/* Below md the sidebar is hidden, so the nav becomes a scrolling strip. */}
-        <div className="border-border bg-sidebar border-b md:hidden">
-          <SidebarNav orientation="horizontal" />
-        </div>
-
-        <main id="main" className="min-w-0 flex-1 px-4 py-6 md:px-8 md:py-8">
-          {children}
-        </main>
-      </div>
-    </div>
-  );
+  return <AppFrame>{children}</AppFrame>;
 }

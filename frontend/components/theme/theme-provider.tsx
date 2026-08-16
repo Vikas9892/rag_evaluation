@@ -15,6 +15,15 @@ export type Theme = "light" | "dark" | "system";
 const STORAGE_KEY = "rag-eval.theme";
 
 /**
+ * What a reader who has expressed no preference sees.
+ *
+ * Dark, not "system". The dark palette is the designed one and the light set is
+ * built to match it; defaulting to the OS would hand half of first-time
+ * visitors the secondary treatment.
+ */
+const DEFAULT_THEME: Theme = "dark";
+
+/**
  * Runs before React hydrates, in a blocking script tag.
  *
  * Without it the page paints with the default theme and then corrects itself,
@@ -26,7 +35,12 @@ export const THEME_INIT_SCRIPT = `
 (function () {
   try {
     var stored = localStorage.getItem(${JSON.stringify(STORAGE_KEY)});
-    var theme = stored === "light" || stored === "dark" ? stored : "system";
+    // Dark unless the reader has said otherwise. This is a dark-first product;
+    // defaulting to the OS would show half of first-time visitors a light
+    // interface that was designed second.
+    var theme = stored === "light" || stored === "dark" || stored === "system"
+      ? stored
+      : "dark";
     var dark = theme === "dark" ||
       (theme === "system" && window.matchMedia("(prefers-color-scheme: dark)").matches);
     document.documentElement.classList.toggle("dark", dark);
@@ -76,9 +90,9 @@ function readStored(): Theme {
     const raw = localStorage.getItem(STORAGE_KEY);
     if (raw === "light" || raw === "dark" || raw === "system") return raw;
   } catch {
-    /* private mode; fall back to system */
+    /* private mode; fall back to the default */
   }
-  return "system";
+  return DEFAULT_THEME;
 }
 
 // Cached because getSnapshot must return a referentially stable value: React
@@ -130,8 +144,8 @@ function getResolved(): "light" | "dark" {
  * The inline script means the DOM is already correct either way, so the brief
  * disagreement is invisible.
  */
-const serverTheme = (): Theme => "system";
-const serverResolved = (): "light" | "dark" => "light";
+const serverTheme = (): Theme => DEFAULT_THEME;
+const serverResolved = (): "light" | "dark" => "dark";
 
 export function ThemeProvider({ children }: { children: ReactNode }) {
   const theme = useSyncExternalStore(subscribe, getTheme, serverTheme);

@@ -1,16 +1,17 @@
 "use client";
 
 import Link from "next/link";
+import { ArrowRightIcon } from "lucide-react";
 
 import { ErrorState } from "@/components/error-state";
 import { Modes } from "@/components/overview/modes";
-import { MetricTile, ms } from "@/components/metric-tile";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Section } from "@/components/ui/section";
+import { Stat, ms } from "@/components/ui/stat";
+import { StatusBadge, type StatusTone } from "@/components/ui/status-badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useConfig, useDeepHealth } from "@/hooks/use-platform";
 import { useMetrics } from "@/hooks/use-metrics";
 import { ROUTES } from "@/lib/routes";
-import { cn } from "@/lib/utils";
 import type { HealthCheck } from "@/types/api";
 
 /**
@@ -20,6 +21,10 @@ import type { HealthCheck } from "@/types/api";
  * hardcoded "19 chunks" would be right until the index was rebuilt and wrong
  * silently thereafter, which is the failure this platform exists to catch in
  * other people's systems.
+ *
+ * Laid out as sections rather than a stack of cards: only the two mode panels
+ * are objects you choose between. Status rows, metrics and links are content,
+ * and framing each group would put four borders on screen that mean nothing.
  */
 export function OverviewPanel() {
   const health = useDeepHealth();
@@ -27,7 +32,7 @@ export function OverviewPanel() {
   const metrics = useMetrics();
 
   return (
-    <div className="space-y-6">
+    <div className="flex flex-col gap-8">
       {/*
         First, because it is the only thing on this page that answers "what is
         this and what do I do with it". The health checks below matter to
@@ -35,124 +40,134 @@ export function OverviewPanel() {
       */}
       <Modes />
 
-      <Card>
-        <CardHeader>
-          <CardTitle>Dependencies</CardTitle>
-        </CardHeader>
-        <CardContent>
-          {health.isPending ? (
-            <Skeleton className="h-20 w-full" />
-          ) : health.error ? (
-            <ErrorState error={health.error} onRetry={() => void health.refetch()} />
-          ) : (
-            <ul className="space-y-2">
-              {health.data?.checks.map((check) => (
-                <CheckRow key={check.name} check={check} />
-              ))}
-            </ul>
-          )}
-        </CardContent>
-      </Card>
+      <Section
+        title="System status"
+        description="Checked against the running deployment, not assumed."
+      >
+        {health.isPending ? (
+          <Skeleton className="h-24 w-full" />
+        ) : health.error ? (
+          <ErrorState error={health.error} onRetry={() => void health.refetch()} />
+        ) : (
+          <ul className="border-border divide-border divide-y rounded-lg border">
+            {health.data?.checks.map((check) => (
+              <CheckRow key={check.name} check={check} />
+            ))}
+          </ul>
+        )}
+      </Section>
 
-      <Card>
-        <CardHeader>
-          <CardTitle>Corpus</CardTitle>
-        </CardHeader>
-        <CardContent>
-          {config.isPending ? (
-            <Skeleton className="h-24 w-full" />
-          ) : config.error ? (
-            <ErrorState error={config.error} onRetry={() => void config.refetch()} />
-          ) : config.data ? (
-            <div className="grid gap-3 sm:grid-cols-3">
-              <MetricTile
-                label="Indexed chunks"
-                value={String(config.data.indexed_chunks)}
+      <Section title="Corpus" description="What the benchmark index currently holds.">
+        {config.isPending ? (
+          <Skeleton className="h-24 w-full" />
+        ) : config.error ? (
+          <ErrorState error={config.error} onRetry={() => void config.refetch()} />
+        ) : config.data ? (
+          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+            <Stat
+              label="Indexed chunks"
+              value={config.data.indexed_chunks.toLocaleString()}
+            />
+            <Stat label="Documents" value={config.data.documents} />
+            <Stat
+              label="Chunk size"
+              value={config.data.chunk_size}
+              caption={`${config.data.chunk_overlap} character overlap`}
+            />
+            <Stat
+              label="Embedding"
+              value={
+                <span className="text-[13px] break-all">
+                  {config.data.embedding_model}
+                </span>
+              }
+              caption="Every vector was produced by this model."
+            />
+          </div>
+        ) : null}
+      </Section>
+
+      <Section
+        title="Since cold start"
+        description="Counted in this process and reset on restart — there is no persistence behind them."
+      >
+        {metrics.isPending ? (
+          <Skeleton className="h-24 w-full" />
+        ) : metrics.error ? (
+          <ErrorState error={metrics.error} onRetry={() => void metrics.refetch()} />
+        ) : metrics.data ? (
+          <>
+            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+              <Stat label="Queries" value={metrics.data.total_queries} />
+              <Stat
+                label="Errors"
+                value={metrics.data.errors}
+                tone={metrics.data.errors > 0 ? "danger" : undefined}
               />
-              <MetricTile label="Documents" value={String(config.data.documents)} />
-              <MetricTile
-                label="Chunk size"
-                value={`${config.data.chunk_size}`}
-                caption={`${config.data.chunk_overlap} character overlap`}
-              />
+              <Stat label="Avg retrieval" value={ms(metrics.data.avg_retrieval_ms)} />
+              <Stat label="Avg generation" value={ms(metrics.data.avg_generation_ms)} />
             </div>
-          ) : null}
-        </CardContent>
-      </Card>
+            <p className="text-subtle-foreground text-xs">
+              The same numbers are scrapeable at{" "}
+              <code className="font-mono">/metrics/prometheus</code>.
+            </p>
+          </>
+        ) : null}
+      </Section>
 
-      <Card>
-        <CardHeader>
-          <CardTitle>Since cold start</CardTitle>
-        </CardHeader>
-        <CardContent>
-          {metrics.isPending ? (
-            <Skeleton className="h-24 w-full" />
-          ) : metrics.error ? (
-            <ErrorState error={metrics.error} onRetry={() => void metrics.refetch()} />
-          ) : metrics.data ? (
-            <div className="grid gap-3 sm:grid-cols-4">
-              <MetricTile label="Queries" value={String(metrics.data.total_queries)} />
-              <MetricTile label="Errors" value={String(metrics.data.errors)} />
-              <MetricTile
-                label="Avg retrieval"
-                value={ms(metrics.data.avg_retrieval_ms)}
-              />
-              <MetricTile
-                label="Avg generation"
-                value={ms(metrics.data.avg_generation_ms)}
-              />
-            </div>
-          ) : null}
-          <p className="text-muted-foreground mt-3 text-xs">
-            Counted in this process and reset on restart — there is no persistence behind
-            them. The same numbers are scrapeable at <code>/metrics/prometheus</code>.
-          </p>
-        </CardContent>
-      </Card>
-
-      <nav aria-label="Sections" className="grid gap-3 sm:grid-cols-2">
-        {ROUTES.filter(
-          (r) => !["/", "/about", "/workspace", "/evaluation"].includes(r.href),
-        ).map((route) => {
-          const Icon = route.icon;
-          return (
-            <Link
-              key={route.href}
-              href={route.href}
-              className="border-border hover:bg-accent focus-visible:ring-ring rounded-lg border p-4 transition-colors focus-visible:ring-2 focus-visible:outline-none"
-            >
-              <span className="flex items-center gap-2 font-medium">
-                <Icon aria-hidden className="size-4" />
-                {route.label}
-              </span>
-              <span className="text-muted-foreground mt-1 block text-sm">
-                {route.description}
-              </span>
-            </Link>
-          );
-        })}
-      </nav>
+      <Section title="Quick actions" description="Where to go next.">
+        <nav aria-label="Sections" className="grid gap-2 sm:grid-cols-2">
+          {ROUTES.filter((r) => !["/", "/about"].includes(r.href)).map((route) => {
+            const Icon = route.icon;
+            return (
+              <Link
+                key={route.href}
+                href={route.href}
+                className="group border-border bg-card hover:border-border-strong hover:bg-accent focus-visible:ring-ring flex items-start gap-3 rounded-lg border p-3 transition-colors focus-visible:ring-2 focus-visible:outline-none"
+              >
+                <Icon
+                  aria-hidden
+                  className="text-muted-foreground group-hover:text-foreground mt-0.5 size-4 shrink-0 transition-colors"
+                />
+                <span className="min-w-0 flex-1">
+                  <span className="flex items-center gap-1.5 text-sm font-medium">
+                    {route.label}
+                    <ArrowRightIcon
+                      aria-hidden
+                      className="text-muted-foreground size-3 opacity-0 transition-opacity group-hover:opacity-100"
+                    />
+                  </span>
+                  <span className="text-muted-foreground mt-0.5 block text-xs leading-snug">
+                    {route.description}
+                  </span>
+                </span>
+              </Link>
+            );
+          })}
+        </nav>
+      </Section>
     </div>
   );
 }
 
+const CHECK_TONE: Record<string, StatusTone> = {
+  pass: "success",
+  warn: "warning",
+  fail: "danger",
+};
+
 function CheckRow({ check }: { check: HealthCheck }) {
   return (
-    <li className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5 text-sm">
-      {/* The word carries the state, not the dot: colour alone is unreadable to
-          a screen reader and disappears under forced colours. */}
-      <span
-        aria-hidden
-        className={cn(
-          "size-2 shrink-0 translate-y-[-1px] rounded-full",
-          check.status === "pass" && "bg-emerald-500",
-          check.status === "warn" && "bg-amber-500",
-          check.status === "fail" && "bg-red-500",
-        )}
-      />
-      <span className="font-medium">{check.name}</span>
-      <span className="text-muted-foreground text-xs uppercase">{check.status}</span>
-      <span className="text-muted-foreground">— {check.detail}</span>
+    <li className="flex flex-wrap items-center gap-x-3 gap-y-1 px-3 py-2.5 text-sm">
+      <span className="min-w-[7rem] font-mono text-[13px]">{check.name}</span>
+      {/* The word carries the state, not the tint: colour alone is unreadable
+          to a screen reader and disappears under forced colours. */}
+      <StatusBadge tone={CHECK_TONE[check.status] ?? "neutral"}>
+        {check.status.toUpperCase()}
+      </StatusBadge>
+      <span className="text-muted-foreground min-w-0 flex-1 text-[13px]">
+        {check.detail}
+      </span>
     </li>
   );
 }

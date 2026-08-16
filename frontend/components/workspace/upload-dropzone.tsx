@@ -74,17 +74,23 @@ export function UploadDropzone({
         }}
         onDragLeave={() => setDragging(false)}
         onDrop={onDrop}
+        // A row, not a canvas. The old version was a 200px-tall empty
+        // rectangle whose height communicated nothing — the drop target only
+        // has to be big enough to hit, and the constraints only have to be
+        // readable.
         className={cn(
-          "rounded-lg border border-dashed p-8 text-center transition-colors",
-          dragging ? "border-foreground/40 bg-muted/50" : "border-border",
+          "flex flex-wrap items-center gap-x-4 gap-y-3 rounded-lg border border-dashed px-4 py-3.5 transition-colors",
+          dragging ? "border-primary/60 bg-primary/5" : "border-border-strong",
           disabled && "pointer-events-none opacity-60",
         )}
       >
-        <UploadIcon aria-hidden className="text-muted-foreground mx-auto size-6" />
-        <p className="mt-3 text-sm font-medium">Drop documents here</p>
-        <p className="text-muted-foreground mt-1 text-xs">
-          {ACCEPTED_EXTENSIONS.join(", ")} · up to {MAX_UPLOAD_MB} MB each
-        </p>
+        <UploadIcon aria-hidden className="text-muted-foreground size-4 shrink-0" />
+        <div className="min-w-0 flex-1">
+          <p className="text-sm font-medium">Drop documents here</p>
+          <p className="text-subtle-foreground mt-0.5 text-xs">
+            {ACCEPTED_EXTENSIONS.join(", ")} · up to {MAX_UPLOAD_MB} MB each
+          </p>
+        </div>
 
         <input
           ref={inputRef}
@@ -102,7 +108,6 @@ export function UploadDropzone({
           type="button"
           variant="outline"
           size="sm"
-          className="mt-4"
           disabled={disabled}
           onClick={() => inputRef.current?.click()}
         >

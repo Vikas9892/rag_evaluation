@@ -57,7 +57,7 @@ export const ROUTES: readonly AppRoute[] = [
   {
     href: "/settings",
     label: "Settings",
-    description: "Retrieval knobs applied to queries in this session.",
+    description: "What this deployment is running, and when each setting takes effect.",
     icon: Settings,
   },
   {

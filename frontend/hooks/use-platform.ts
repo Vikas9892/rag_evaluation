@@ -2,7 +2,13 @@
 
 import { useQuery } from "@tanstack/react-query";
 
-import { getBenchmarks, getConfig, getDeepHealth, getEvaluation } from "@/services/api";
+import {
+  getBenchmarks,
+  getConfig,
+  getDeepHealth,
+  getEvaluation,
+  getSettings,
+} from "@/services/api";
 import type { RetrieverMode } from "@/types/api";
 
 /**
@@ -16,6 +22,22 @@ export function useConfig() {
   return useQuery({
     queryKey: ["config"],
     queryFn: ({ signal }) => getConfig(signal),
+    staleTime: 30 * 60_000,
+  });
+}
+
+/**
+ * Every setting, grouped, with when it takes effect.
+ *
+ * Distinct from useConfig: /config reports the values, /settings reports what
+ * each one *is* — query-time or indexing-time, and whether changing it
+ * invalidates the index. The UI must not restate that taxonomy from memory,
+ * because it would then be the frontend's opinion rather than the API's.
+ */
+export function useSettings() {
+  return useQuery({
+    queryKey: ["settings"],
+    queryFn: ({ signal }) => getSettings(signal),
     staleTime: 30 * 60_000,
   });
 }

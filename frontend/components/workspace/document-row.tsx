@@ -4,6 +4,7 @@ import { CheckIcon, FileTextIcon, Loader2Icon, Trash2Icon, XIcon } from "lucide-
 import Link from "next/link";
 
 import { Button, buttonVariants } from "@/components/ui/button";
+import { StatusBadge, type StatusTone } from "@/components/ui/status-badge";
 import { cn } from "@/lib/utils";
 import type { DocumentResponse, DocumentStatus } from "@/types/api";
 
@@ -17,12 +18,6 @@ const STAGES: { status: DocumentStatus; label: string }[] = [
   { status: "INDEXING", label: "Indexed" },
 ];
 
-function formatSize(bytes: number): string {
-  if (bytes < 1024) return `${bytes} B`;
-  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(0)} KB`;
-  return `${(bytes / 1024 / 1024).toFixed(1)} MB`;
-}
-
 /** The worker's stages in pipeline order, so the breakdown reads as a sequence. */
 const TIMED_STAGES: { key: string; label: string }[] = [
   { key: "parse", label: "parse" },
@@ -31,10 +26,28 @@ const TIMED_STAGES: { key: string; label: string }[] = [
   { key: "index", label: "index" },
 ];
 
+function formatSize(bytes: number): string {
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(0)} KB`;
+  return `${(bytes / 1024 / 1024).toFixed(1)} MB`;
+}
+
 function formatMs(ms: number): string {
   return ms >= 1000 ? `${(ms / 1000).toFixed(1)} s` : `${Math.round(ms)} ms`;
 }
 
+const STATUS_TONE: Record<string, StatusTone> = {
+  READY: "success",
+  FAILED: "danger",
+};
+
+/**
+ * One document, as a table row.
+ *
+ * A row rather than a card: a knowledge base is a list of comparable things,
+ * and framing each one separately makes scanning ten of them harder than
+ * scanning ten rows.
+ */
 export function DocumentRow({
   document,
   corpusId,
@@ -50,30 +63,56 @@ export function DocumentRow({
   const ready = document.status === "READY";
 
   return (
-    <li className="border-border rounded-lg border p-4">
-      <div className="flex flex-wrap items-start gap-3">
-        <FileTextIcon
-          aria-hidden
-          className="text-muted-foreground mt-0.5 size-4 shrink-0"
-        />
+    <tr className="border-border hover:bg-muted/30 border-b transition-colors last:border-b-0">
+      <td className="py-2.5 pr-3 pl-3 align-top">
+        <div className="flex items-start gap-2.5">
+          <FileTextIcon
+            aria-hidden
+            className="text-subtle-foreground mt-0.5 size-3.5 shrink-0"
+          />
+          <div className="min-w-0">
+            <div className="truncate text-sm font-medium">{document.filename}</div>
 
-        <div className="min-w-0 flex-1">
-          <p className="truncate font-medium">{document.filename}</p>
-          <p className="text-muted-foreground mt-0.5 text-xs">
-            {formatSize(document.size_bytes)}
-            {ready ? ` · ${document.chunk_count} chunks` : null}
-            {` · ${document.corpus_id}`}
-          </p>
+            {/* The stage list is shown only while work is happening. Six ticks
+                on every finished document is noise. */}
+            {!ready && !failed ? <Stages status={document.status} /> : null}
+
+            {ready && document.timings_ms ? (
+              <Timings timings={document.timings_ms} />
+            ) : null}
+
+            {failed ? (
+              <p className="text-destructive mt-1 text-xs" role="alert">
+                {document.error ?? "Indexing failed."}
+              </p>
+            ) : null}
+          </div>
         </div>
+      </td>
 
-        <div className="flex items-center gap-2">
-          <StatusBadge status={document.status} />
+      <td className="text-muted-foreground py-2.5 pr-3 text-right align-top font-mono text-xs whitespace-nowrap tabular-nums">
+        {formatSize(document.size_bytes)}
+      </td>
+
+      <td className="text-muted-foreground py-2.5 pr-3 text-right align-top font-mono text-xs whitespace-nowrap tabular-nums">
+        {ready ? document.chunk_count : "—"}
+      </td>
+
+      <td className="py-2.5 pr-3 align-top">
+        <StatusBadge tone={STATUS_TONE[document.status] ?? "neutral"}>
+          {failed ? <XIcon aria-hidden className="size-3" /> : null}
+          {document.status}
+        </StatusBadge>
+      </td>
+
+      <td className="py-2.5 pr-3 align-top">
+        <div className="flex items-center justify-end gap-1">
           {ready ? (
-            // A link, styled as a button: this navigates, and a <button> that
-            // navigates loses middle-click, open-in-new-tab and the status bar.
+            // A link styled as a button: this navigates, and a <button> that
+            // navigates loses middle-click and open-in-new-tab.
             <Link
               href={`/query?corpus=${encodeURIComponent(corpusId)}`}
-              className={buttonVariants({ variant: "outline", size: "sm" })}
+              className={buttonVariants({ variant: "outline", size: "xs" })}
             >
               Ask questions
             </Link>
@@ -81,7 +120,7 @@ export function DocumentRow({
           <Button
             type="button"
             variant="ghost"
-            size="icon-sm"
+            size="icon-xs"
             aria-label={`Delete ${document.filename}`}
             disabled={deleting}
             onClick={() => onDelete(document.document_id)}
@@ -89,27 +128,8 @@ export function DocumentRow({
             <Trash2Icon aria-hidden />
           </Button>
         </div>
-      </div>
-
-      {/*
-        The stage list is shown only while work is happening. Leaving six ticks
-        on every finished document turns the list into noise.
-      */}
-      {!ready && !failed ? <Stages status={document.status} /> : null}
-
-      {/*
-        Where the wait went. The stage costs were measured all along and only
-        logged, so the one place indexing time was visible was a server log the
-        person who waited for it cannot read.
-      */}
-      {ready && document.timings_ms ? <Timings timings={document.timings_ms} /> : null}
-
-      {failed ? (
-        <p className="text-destructive mt-3 text-sm" role="alert">
-          {document.error ?? "Indexing failed."}
-        </p>
-      ) : null}
-    </li>
+      </td>
+    </tr>
   );
 }
 
@@ -120,8 +140,8 @@ function Timings({ timings }: { timings: Record<string, number> }) {
   const total = stages.reduce((sum, { key }) => sum + timings[key], 0);
 
   return (
-    <p className="text-muted-foreground mt-3 font-mono text-xs">
-      <span className="text-foreground">Indexed in {formatMs(total)}</span>
+    <p className="text-subtle-foreground mt-1 font-mono text-[11px]">
+      <span className="text-muted-foreground">Indexed in {formatMs(total)}</span>
       {" — "}
       {stages.map(({ key, label }, index) => (
         <span key={key}>
@@ -137,7 +157,7 @@ function Stages({ status }: { status: DocumentStatus }) {
   const currentIndex = STAGES.findIndex((s) => s.status === status);
 
   return (
-    <ol className="mt-3 flex flex-wrap gap-x-4 gap-y-1">
+    <ol className="mt-1.5 flex flex-wrap gap-x-3 gap-y-1">
       {STAGES.map((stage, index) => {
         const done = index < currentIndex;
         const active = index === currentIndex;
@@ -145,20 +165,20 @@ function Stages({ status }: { status: DocumentStatus }) {
           <li
             key={stage.status}
             className={cn(
-              "flex items-center gap-1.5 text-xs",
+              "flex items-center gap-1 text-[11px]",
               done && "text-muted-foreground",
               active && "text-foreground font-medium",
-              !done && !active && "text-muted-foreground/50",
+              !done && !active && "text-subtle-foreground/50",
             )}
           >
             {done ? (
-              <CheckIcon aria-hidden className="size-3" />
+              <CheckIcon aria-hidden className="text-success size-3" />
             ) : active ? (
-              <Loader2Icon aria-hidden className="size-3 animate-spin" />
+              <Loader2Icon aria-hidden className="text-primary size-3 animate-spin" />
             ) : (
               <span
                 aria-hidden
-                className="border-muted-foreground/40 size-3 rounded-full border"
+                className="border-border-strong size-2 rounded-full border"
               />
             )}
             {stage.label}
@@ -166,26 +186,5 @@ function Stages({ status }: { status: DocumentStatus }) {
         );
       })}
     </ol>
-  );
-}
-
-function StatusBadge({ status }: { status: DocumentStatus }) {
-  const ready = status === "READY";
-  const failed = status === "FAILED";
-
-  return (
-    <span
-      className={cn(
-        "rounded-md border px-2 py-0.5 font-mono text-xs",
-        ready && "border-emerald-600/30 text-emerald-700 dark:text-emerald-400",
-        failed && "border-destructive/40 text-destructive",
-        !ready && !failed && "text-muted-foreground",
-      )}
-    >
-      {/* The word is the status; the colour only reinforces it, so this stays
-          readable in forced colours and to a screen reader. */}
-      {failed ? <XIcon aria-hidden className="mr-1 inline size-3" /> : null}
-      {status}
-    </span>
   );
 }

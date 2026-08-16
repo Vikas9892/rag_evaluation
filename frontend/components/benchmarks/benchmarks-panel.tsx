@@ -4,7 +4,8 @@ import { ArrowUpIcon } from "lucide-react";
 import { useState } from "react";
 
 import { ErrorState } from "@/components/error-state";
-import { ms, ratio } from "@/components/metric-tile";
+import { ms, ratio } from "@/components/ui/stat";
+import { StatusBadge } from "@/components/ui/status-badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
@@ -197,16 +198,20 @@ function MrrChart({ ranked }: { ranked: BenchmarkCell[] }) {
           key={label(cell)}
           className="grid grid-cols-[10rem_1fr_3.5rem] items-center gap-2"
         >
-          <span className="text-sm">{label(cell)}</span>
-          <span className="bg-muted h-3 overflow-hidden rounded-sm" aria-hidden>
+          <span className="truncate text-[13px]">{label(cell)}</span>
+          <span className="bg-muted h-2 overflow-hidden rounded-full" aria-hidden>
             <span
-              className="bg-foreground/70 block h-full rounded-sm"
+              // MRR is indigo everywhere in this product, so a reader who
+              // learns the mapping once does not relearn it per page.
+              className="bg-chart-3 block h-full rounded-full"
               // MRR is already a 0–1 proportion, so the bar is the value — no
               // rescaling to the maximum, which would exaggerate small gaps.
               style={{ width: `${Math.max(cell.metrics.mrr, 0) * 100}%` }}
             />
           </span>
-          <span className="text-right font-mono text-sm">{ratio(cell.metrics.mrr)}</span>
+          <span className="text-right font-mono text-[13px] tabular-nums">
+            {ratio(cell.metrics.mrr)}
+          </span>
         </li>
       ))}
     </ul>
@@ -214,14 +219,20 @@ function MrrChart({ ranked }: { ranked: BenchmarkCell[] }) {
 }
 
 /** The sortable columns, and what each header says. */
-const COLUMNS: { key: SortKey; label: string; className?: string }[] = [
+const COLUMNS: {
+  key: SortKey;
+  label: string;
+  className?: string;
+  /** Right-aligned, tabular. Text columns stay left. */
+  numeric?: boolean;
+}[] = [
   { key: "configuration", label: "Retriever" },
-  { key: "top_k", label: "K", className: "w-16" },
-  { key: "precision_at_k", label: "Precision@K", className: "w-28" },
-  { key: "recall_at_k", label: "Recall", className: "w-24" },
-  { key: "mrr", label: "MRR", className: "w-24" },
-  { key: "hit_rate", label: "Hit rate", className: "w-24" },
-  { key: "avg_latency_ms", label: "Latency", className: "w-28" },
+  { key: "top_k", numeric: true, label: "K", className: "w-16" },
+  { key: "precision_at_k", numeric: true, label: "Precision@K", className: "w-28" },
+  { key: "recall_at_k", numeric: true, label: "Recall", className: "w-24" },
+  { key: "mrr", numeric: true, label: "MRR", className: "w-24" },
+  { key: "hit_rate", numeric: true, label: "Hit rate", className: "w-24" },
+  { key: "avg_latency_ms", numeric: true, label: "Latency", className: "w-28" },
 ];
 
 function Matrix({ data, best }: { data: BenchmarkResponse; best?: BenchmarkCell }) {
@@ -243,7 +254,7 @@ function Matrix({ data, best }: { data: BenchmarkResponse; best?: BenchmarkCell 
             {COLUMNS.map((column) => (
               <TableHead
                 key={column.key}
-                className={column.className}
+                className={cn(column.className, column.numeric && "text-right")}
                 // Announced to a screen reader, which otherwise has no way to
                 // know the table is sorted or by what.
                 aria-sort={
@@ -257,7 +268,10 @@ function Matrix({ data, best }: { data: BenchmarkResponse; best?: BenchmarkCell 
                 <button
                   type="button"
                   onClick={() => setSort((current) => nextSort(current, column.key))}
-                  className="hover:text-foreground flex items-center gap-1"
+                  className={cn(
+                    "hover:text-foreground flex items-center gap-1",
+                    column.numeric && "ml-auto flex-row-reverse",
+                  )}
                 >
                   {column.label}
                   {sort.key === column.key ? (
@@ -283,23 +297,32 @@ function Matrix({ data, best }: { data: BenchmarkResponse; best?: BenchmarkCell 
                 <TableCell className={cn(isBest && "font-medium")}>
                   {cell.retriever}
                   {isBest ? (
-                    <span className="text-muted-foreground ml-2 text-xs">best MRR</span>
+                    <StatusBadge tone="success" className="ml-2">
+                      best MRR
+                    </StatusBadge>
                   ) : null}
                 </TableCell>
-                <TableCell className="font-mono text-sm">{cell.top_k}</TableCell>
-                <TableCell className="font-mono text-sm">
+                <TableCell className="text-right font-mono text-sm tabular-nums">
+                  {cell.top_k}
+                </TableCell>
+                <TableCell className="text-right font-mono text-sm tabular-nums">
                   {ratio(cell.metrics.precision_at_k)}
                 </TableCell>
-                <TableCell className="font-mono text-sm">
+                <TableCell className="text-right font-mono text-sm tabular-nums">
                   {ratio(cell.metrics.recall_at_k)}
                 </TableCell>
-                <TableCell className={cn("font-mono text-sm", isBest && "font-medium")}>
+                <TableCell
+                  className={cn(
+                    "text-right font-mono text-sm tabular-nums",
+                    isBest && "text-foreground font-medium",
+                  )}
+                >
                   {ratio(cell.metrics.mrr)}
                 </TableCell>
-                <TableCell className="font-mono text-sm">
+                <TableCell className="text-right font-mono text-sm tabular-nums">
                   {ratio(cell.metrics.hit_rate)}
                 </TableCell>
-                <TableCell className="text-muted-foreground font-mono text-xs">
+                <TableCell className="text-muted-foreground text-right font-mono text-xs tabular-nums">
                   {ms(cell.metrics.avg_latency_ms)}
                 </TableCell>
                 <TableCell className="text-muted-foreground text-sm">
