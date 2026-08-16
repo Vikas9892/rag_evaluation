@@ -25,6 +25,8 @@ function cell(
       hit_rate: 1,
       mrr,
       avg_latency_ms: 85,
+      p50_latency_ms: 85,
+      p95_latency_ms: 170,
     },
   };
 }

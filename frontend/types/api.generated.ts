@@ -846,6 +846,18 @@ export interface components {
              * @description Mean retrieval latency across the dataset
              */
             avg_latency_ms: number;
+            /**
+             * P50 Latency Ms
+             * @description Median retrieval latency across the dataset
+             * @default 0
+             */
+            p50_latency_ms: number;
+            /**
+             * P95 Latency Ms
+             * @description 95th-percentile retrieval latency. The mean hides the tail, and the tail is what a waiting user experiences.
+             * @default 0
+             */
+            p95_latency_ms: number;
         };
         /**
          * SettingDescriptor
