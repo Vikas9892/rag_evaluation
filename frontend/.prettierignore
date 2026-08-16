@@ -4,3 +4,7 @@ coverage
 public
 # Generated from the FastAPI OpenAPI schema — never hand-edited, never reformatted.
 types/api.generated.ts
+# Playwright's run artefacts. Gitignored, but prettier does not read .gitignore,
+# so `npm run verify` failed on a file the test run had just written.
+test-results
+playwright-report

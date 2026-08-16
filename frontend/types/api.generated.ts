@@ -1206,13 +1206,6 @@ export interface operations {
                     "application/json": components["schemas"]["SettingsResponse"];
                 };
             };
-            /** @description Pipeline not available */
-            503: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
         };
     };
     deep_health_health_deep_get: {
