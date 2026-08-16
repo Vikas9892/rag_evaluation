@@ -80,7 +80,9 @@ class DocumentIndexer:
         """Entry point for the queue. Never raises: failures land on the record."""
         document = self._repo.get(job.document_id)
         if document is None:
-            logger.warning("Job %s references unknown document %s", job.job_id, job.document_id)
+            logger.warning(
+                "Job %s references unknown document %s", job.job_id, job.document_id
+            )
             return
 
         timings: List[StageTiming] = []
@@ -91,7 +93,9 @@ class DocumentIndexer:
             self._index(job, vectors, chunks, timings)
         except IndexingError as exc:
             logger.warning("Indexing failed for %s: %s", job.document_id, exc)
-            self._repo.set_status(job.document_id, DocumentStatus.FAILED, error=str(exc))
+            self._repo.set_status(
+                job.document_id, DocumentStatus.FAILED, error=str(exc)
+            )
             return
         except Exception as exc:  # noqa: BLE001 - the record must record something
             # The message reaches a user, so it says what failed rather than
@@ -174,7 +178,9 @@ class DocumentIndexer:
         chunks = splitter.split(parsed)
 
         if not chunks:
-            raise IndexingError("The document produced no chunks — it may be too short.")
+            raise IndexingError(
+                "The document produced no chunks — it may be too short."
+            )
 
         # The chunk's document_id is what a citation shows, so it carries the
         # filename rather than an opaque id; corpus_id is what scopes retrieval.

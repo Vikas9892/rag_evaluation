@@ -1,4 +1,5 @@
 """Unit tests for Phase 1 — document ingestion pipeline."""
+
 import sys
 from pathlib import Path
 import pytest
@@ -10,14 +11,16 @@ from ingestion.cleaner import TextCleaner
 from ingestion.parser import TXTParser, MarkdownParser
 from ingestion.loader import DocumentLoader
 
-
 # ---------------------------------------------------------------------------
 # Document dataclass
 # ---------------------------------------------------------------------------
 
+
 class TestDocument:
     def test_fields_are_set(self):
-        doc = Document(id="a.txt", source="/raw/a.txt", text="hello", metadata={"type": "txt"})
+        doc = Document(
+            id="a.txt", source="/raw/a.txt", text="hello", metadata={"type": "txt"}
+        )
         assert doc.id == "a.txt"
         assert doc.text == "hello"
         assert doc.metadata["type"] == "txt"
@@ -31,6 +34,7 @@ class TestDocument:
 # ---------------------------------------------------------------------------
 # TextCleaner
 # ---------------------------------------------------------------------------
+
 
 class TestTextCleaner:
     def setup_method(self):
@@ -60,6 +64,7 @@ class TestTextCleaner:
 # TXTParser
 # ---------------------------------------------------------------------------
 
+
 class TestTXTParser:
     def test_parse_valid_txt(self, tmp_path):
         f = tmp_path / "sample.txt"
@@ -80,6 +85,7 @@ class TestTXTParser:
 # MarkdownParser
 # ---------------------------------------------------------------------------
 
+
 class TestMarkdownParser:
     def test_parse_markdown(self, tmp_path):
         f = tmp_path / "doc.md"
@@ -92,6 +98,7 @@ class TestMarkdownParser:
 # ---------------------------------------------------------------------------
 # DocumentLoader
 # ---------------------------------------------------------------------------
+
 
 class TestDocumentLoader:
     def test_loads_txt_file(self, tmp_path):

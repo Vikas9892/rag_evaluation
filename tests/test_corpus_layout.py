@@ -45,7 +45,10 @@ class TestOtherCorpora:
         a, b = corpus_layout("alpha"), corpus_layout("beta")
         assert a.faiss_path != b.faiss_path
         assert a.metadata_path != b.metadata_path
-        assert corpus_layout(DEFAULT_CORPUS_ID).faiss_path not in (a.faiss_path, b.faiss_path)
+        assert corpus_layout(DEFAULT_CORPUS_ID).faiss_path not in (
+            a.faiss_path,
+            b.faiss_path,
+        )
 
 
 class TestIdValidation:

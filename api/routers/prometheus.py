@@ -16,7 +16,12 @@ router = APIRouter(tags=["ops"])
 
 #: Exposition format: HELP, TYPE, then the sample.
 _METRICS = (
-    ("rag_queries_total", "counter", "Queries answered since cold start", "total_queries"),
+    (
+        "rag_queries_total",
+        "counter",
+        "Queries answered since cold start",
+        "total_queries",
+    ),
     ("rag_errors_total", "counter", "Queries that raised before returning", "errors"),
     (
         "rag_retrieval_latency_ms_avg",

@@ -5,6 +5,7 @@ All tests override the `get_service` dependency with a MockRAGService so
 that no real FAISS index, embedder, or LLM is required.  The TestClient
 handles the ASGI lifecycle, including request/response serialisation.
 """
+
 import pytest
 from fastapi import HTTPException
 from fastapi.testclient import TestClient
@@ -15,10 +16,10 @@ from chunking.chunk import Chunk
 from retrieval.ranking import RetrievalResult
 from services.rag_service import RAGResponse
 
-
 # ---------------------------------------------------------------------------
 # Test doubles
 # ---------------------------------------------------------------------------
+
 
 def _fake_result() -> RetrievalResult:
     chunk = Chunk(
@@ -77,6 +78,7 @@ class MockRAGService:
 # Fixtures
 # ---------------------------------------------------------------------------
 
+
 def _raise_503_resolver(_corpus_id: str):
     raise HTTPException(status_code=503, detail="Index not available")
 
@@ -108,6 +110,7 @@ def client(mock_service: MockRAGService) -> TestClient:
 # GET /health
 # ---------------------------------------------------------------------------
 
+
 class TestHealthEndpoint:
     def test_returns_200(self, client: TestClient) -> None:
         assert client.get("/health").status_code == 200
@@ -128,6 +131,7 @@ class TestHealthEndpoint:
 # ---------------------------------------------------------------------------
 # GET /metrics
 # ---------------------------------------------------------------------------
+
 
 class TestMetricsEndpoint:
     def test_returns_200(self, client: TestClient) -> None:
@@ -158,13 +162,16 @@ class TestMetricsEndpoint:
 # POST /query — happy path
 # ---------------------------------------------------------------------------
 
+
 class TestQueryEndpointSuccess:
     def test_valid_question_returns_200(self, client: TestClient) -> None:
         resp = client.post("/query", json={"question": "Where is the Eiffel Tower?"})
         assert resp.status_code == 200
 
     def test_answer_field_matches_mock(self, client: TestClient) -> None:
-        data = client.post("/query", json={"question": "Where is the Eiffel Tower?"}).json()
+        data = client.post(
+            "/query", json={"question": "Where is the Eiffel Tower?"}
+        ).json()
         assert data["answer"] == "Paris is the capital of France."
 
     def test_sources_is_non_empty_list(self, client: TestClient) -> None:
@@ -186,7 +193,9 @@ class TestQueryEndpointSuccess:
 
     def test_total_latency_equals_sum(self, client: TestClient) -> None:
         data = client.post("/query", json={"question": "test"}).json()
-        expected = round(data["retrieval_latency_ms"] + data["generation_latency_ms"], 1)
+        expected = round(
+            data["retrieval_latency_ms"] + data["generation_latency_ms"], 1
+        )
         assert abs(data["total_latency_ms"] - expected) < 0.05
 
     def test_request_id_non_empty(self, client: TestClient) -> None:
@@ -217,6 +226,7 @@ class TestQueryEndpointSuccess:
 # ---------------------------------------------------------------------------
 # POST /query — validation errors (422)
 # ---------------------------------------------------------------------------
+
 
 class TestQueryValidation:
     def test_missing_question_field_is_422(self, client: TestClient) -> None:
@@ -254,6 +264,7 @@ class TestQueryValidation:
 # ---------------------------------------------------------------------------
 # POST /query — service-level error propagation
 # ---------------------------------------------------------------------------
+
 
 class TestQueryErrorHandling:
     def test_503_when_dependency_raises(self) -> None:

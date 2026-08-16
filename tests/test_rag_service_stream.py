@@ -16,7 +16,6 @@ from retrieval.pipeline import PipelineStage
 from retrieval.ranking import RetrievalResult
 from services.rag_service import RAGService
 
-
 # ---------------------------------------------------------------------------
 # Test doubles
 # ---------------------------------------------------------------------------
@@ -74,11 +73,17 @@ class FakeBuilder:
 
 
 class FakeGenerator:
-    def __init__(self, tokens: Optional[List[str]] = None, raises_after: Optional[int] = None):
-        self.tokens = ["Durability", " means", " persistence."] if tokens is None else tokens
+    def __init__(
+        self, tokens: Optional[List[str]] = None, raises_after: Optional[int] = None
+    ):
+        self.tokens = (
+            ["Durability", " means", " persistence."] if tokens is None else tokens
+        )
         self.raises_after = raises_after
 
-    def stream(self, prompt: Prompt, sources: List[RetrievalResult]) -> Generator[str, None, None]:
+    def stream(
+        self, prompt: Prompt, sources: List[RetrievalResult]
+    ) -> Generator[str, None, None]:
         for i, token in enumerate(self.tokens):
             if self.raises_after is not None and i == self.raises_after:
                 raise RuntimeError("upstream died mid-generation")
@@ -94,7 +99,9 @@ def build_service(retriever=None, generator=None) -> RAGService:
     )
 
 
-def drain(service: RAGService, question: str = "what is durability?", **kwargs) -> List[dict]:
+def drain(
+    service: RAGService, question: str = "what is durability?", **kwargs
+) -> List[dict]:
     return list(service.stream(question, **kwargs))
 
 
@@ -166,7 +173,10 @@ class TestDonePayload:
 
     def test_request_id_is_unique_per_stream(self):
         service = build_service()
-        assert drain(service)[-1]["data"]["request_id"] != drain(service)[-1]["data"]["request_id"]
+        assert (
+            drain(service)[-1]["data"]["request_id"]
+            != drain(service)[-1]["data"]["request_id"]
+        )
 
     def test_reports_the_same_latency_breakdown_as_the_non_streaming_path(self):
         done = self._done()
@@ -261,7 +271,9 @@ class TestMetrics:
         assert metrics["avg_retrieval_ms"] >= 0
 
     def test_a_failure_is_counted_as_an_error(self):
-        service = build_service(retriever=FakeRetriever(raises=RuntimeError("index gone")))
+        service = build_service(
+            retriever=FakeRetriever(raises=RuntimeError("index gone"))
+        )
         with pytest.raises(RuntimeError):
             drain(service)
         assert service.get_metrics()["errors"] == 1
@@ -282,7 +294,9 @@ class TestMidStreamFailure:
     def test_tokens_emitted_before_the_failure_still_reached_the_client(self):
         # The client is told to keep a partial answer; that is only meaningful
         # if the service really does emit tokens before it fails.
-        service = build_service(generator=FakeGenerator(["one", "two", "three"], raises_after=2))
+        service = build_service(
+            generator=FakeGenerator(["one", "two", "three"], raises_after=2)
+        )
         emitted = []
         with pytest.raises(RuntimeError):
             for event in service.stream("q"):

@@ -22,7 +22,9 @@ from retrieval.ranking import RetrievalResult, RetrievalTrace, StageScore
 
 
 def _chunk(cid: str, text: str) -> Chunk:
-    return Chunk(chunk_id=cid, document_id="doc", text=text, start_char=0, end_char=len(text))
+    return Chunk(
+        chunk_id=cid, document_id="doc", text=text, start_char=0, end_char=len(text)
+    )
 
 
 CHUNKS = [
@@ -80,17 +82,25 @@ class TestFillSkipped:
     def test_every_stage_appears_even_when_unreported(self):
         # A stage that vanishes from the diagram reads as "this deployment has
         # no reranker" rather than "the reranker did not run for this query".
-        filled = fill_skipped([PipelineStage(name="dense", status="ok", latency_ms=1.0)])
+        filled = fill_skipped(
+            [PipelineStage(name="dense", status="ok", latency_ms=1.0)]
+        )
         assert names(filled) == list(STAGE_ORDER)
 
     def test_unreported_stages_are_marked_skipped(self):
-        filled = by_name(fill_skipped([PipelineStage(name="dense", status="ok", latency_ms=1.0)]))
+        filled = by_name(
+            fill_skipped([PipelineStage(name="dense", status="ok", latency_ms=1.0)])
+        )
         assert filled["reranker"].status == "skipped"
         assert filled["dense"].status == "ok"
 
     def test_reported_stages_are_left_alone(self):
         stage = PipelineStage(
-            name="dense", status="ok", latency_ms=4.2, candidates_in=19, candidates_out=5
+            name="dense",
+            status="ok",
+            latency_ms=4.2,
+            candidates_in=19,
+            candidates_out=5,
         )
         assert by_name(fill_skipped([stage]))["dense"] is stage
 

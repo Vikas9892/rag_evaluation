@@ -1,4 +1,5 @@
 """Build a FAISS index from the stored vectors and save it to disk."""
+
 import sys
 from pathlib import Path
 
@@ -22,7 +23,7 @@ def main() -> None:
     print("\n--- Index build complete ---")
     print(f"  Vectors indexed : {store.ntotal}")
     print(f"  Dimension       : {vectors.shape[1]}")
-    print(f"  Saved to        : index/faiss.index")
+    print("  Saved to        : index/faiss.index")
 
 
 if __name__ == "__main__":

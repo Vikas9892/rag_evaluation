@@ -1,4 +1,5 @@
 """Entry point: load all documents from data/raw/, chunk them, and print a summary."""
+
 import sys
 from pathlib import Path
 

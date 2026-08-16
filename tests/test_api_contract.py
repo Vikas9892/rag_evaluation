@@ -7,7 +7,6 @@ tests read the TypeScript source and fail when it stops agreeing with Pydantic.
 """
 
 import re
-from pathlib import Path
 from typing import get_args
 
 import pytest

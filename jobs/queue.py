@@ -94,7 +94,9 @@ class InProcessQueue(JobQueue):
 
     def enqueue(self, job: IndexingJob) -> None:
         self._queue.put(job)
-        logger.info("Queued indexing job %s for document %s", job.job_id, job.document_id)
+        logger.info(
+            "Queued indexing job %s for document %s", job.job_id, job.document_id
+        )
 
     def start(self, handler: JobHandler) -> None:
         if self._running:
@@ -106,7 +108,9 @@ class InProcessQueue(JobQueue):
             )
             thread.start()
             self._threads.append(thread)
-        logger.info("In-process indexing worker started (%d thread(s))", self._worker_count)
+        logger.info(
+            "In-process indexing worker started (%d thread(s))", self._worker_count
+        )
 
     def _consume(self, handler: JobHandler) -> None:
         while True:

@@ -11,7 +11,6 @@ until this runs on more than one process, adding Redis would buy nothing.
 """
 
 import time
-from collections import defaultdict
 from dataclasses import dataclass, field
 from threading import Lock
 from typing import Callable, Dict

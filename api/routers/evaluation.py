@@ -12,7 +12,7 @@ evaluation does, so it is opt-in.
 import os
 import time
 from threading import Lock
-from typing import Dict, List, Optional, Tuple
+from typing import Dict, List, Tuple
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 

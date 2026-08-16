@@ -57,7 +57,9 @@ def safe_display_name(filename: str) -> str:
     # Control characters and null bytes are removed rather than substituted:
     # they carry no display value, and turning them into underscores would let
     # an injected byte show up as a visible character in the stored name.
-    without_control = "".join(c for c in normalised if unicodedata.category(c)[0] != "C")
+    without_control = "".join(
+        c for c in normalised if unicodedata.category(c)[0] != "C"
+    )
     cleaned = _SAFE_NAME.sub("_", without_control).strip("._")
     # Everything was stripped, or the name was only separators.
     return cleaned[:120] or "upload"
@@ -83,7 +85,9 @@ def validate(filename: str, size_bytes: int) -> None:
         )
 
 
-def store(corpus_id: str, document_id: str, filename: str, data: bytes) -> Tuple[Path, str]:
+def store(
+    corpus_id: str, document_id: str, filename: str, data: bytes
+) -> Tuple[Path, str]:
     """Write the upload under a generated name, returning its path and hash.
 
     The stored name is the document id plus the validated suffix, so nothing

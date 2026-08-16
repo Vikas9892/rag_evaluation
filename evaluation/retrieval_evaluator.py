@@ -7,7 +7,13 @@ from config.logging_config import get_logger
 from config.settings import TOP_K
 
 from .dataset import BenchmarkSample
-from .metrics import hit_rate, mean_reciprocal_rank, precision_at_k, recall_at_k, reciprocal_rank
+from .metrics import (
+    hit_rate,
+    mean_reciprocal_rank,
+    precision_at_k,
+    recall_at_k,
+    reciprocal_rank,
+)
 
 logger = get_logger(__name__)
 
@@ -85,8 +91,10 @@ class RetrievalEvaluator:
         aggregate = self._aggregate(sample_results)
         logger.info(
             "Retrieval eval complete | P@%d=%.3f | R@%d=%.3f | MRR=%.3f",
-            self.top_k, aggregate.precision_at_k,
-            self.top_k, aggregate.recall_at_k,
+            self.top_k,
+            aggregate.precision_at_k,
+            self.top_k,
+            aggregate.recall_at_k,
             aggregate.mrr,
         )
         return sample_results, aggregate

@@ -1,4 +1,5 @@
 """Interactive RAG CLI: question -> retrieval -> prompt -> generation -> answer."""
+
 import sys
 import time
 from pathlib import Path

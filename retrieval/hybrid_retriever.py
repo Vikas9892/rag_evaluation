@@ -7,6 +7,7 @@ Reciprocal Rank Fusion (Cormack et al., 2009):
 k=60 is the constant from the original paper; it dampens the impact of
 very-high-ranked documents so neither retriever can dominate completely.
 """
+
 import json
 import time
 from pathlib import Path
@@ -19,7 +20,6 @@ from chunking.chunk import Chunk
 from corpora import DEFAULT_CORPUS_ID, CorpusNotFoundError, corpus_layout
 
 from .bm25_store import BM25Store
-from .faiss_store import FAISSStore
 from .pipeline import PipelineStage
 from .ranking import RetrievalResult, RetrievalTrace, RetrieverMode, StageScore
 from .retriever import Retriever
@@ -210,7 +210,9 @@ class HybridRetriever:
         # one retriever and 2nd by the other should still surface.
         candidates = top_k * self._candidate_multiplier
 
-        dense_results, dense_pipeline = self._dense.retrieve_traced(query, top_k=candidates)
+        dense_results, dense_pipeline = self._dense.retrieve_traced(
+            query, top_k=candidates
+        )
 
         t_sparse = time.perf_counter()
         bm25_results = self._bm25.search(query, top_k=candidates)

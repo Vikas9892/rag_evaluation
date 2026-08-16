@@ -79,7 +79,9 @@ def remove_document(corpus_id: str, document_id: str) -> RemovalResult:
         # Nothing left. An empty index is not queryable, and leaving one behind
         # would advertise a corpus with no content.
         _delete_corpus_files(layout)
-        logger.info("Removed the last document from corpus %s; corpus deleted", corpus_id)
+        logger.info(
+            "Removed the last document from corpus %s; corpus deleted", corpus_id
+        )
         return RemovalResult(removed, 0, corpus_deleted=True)
 
     kept_records = [records[i] for i in keep]

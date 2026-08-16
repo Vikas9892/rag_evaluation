@@ -1,4 +1,5 @@
 """Tests for the POST /stream Server-Sent Events endpoint."""
+
 import json
 from typing import Generator
 
@@ -10,10 +11,10 @@ from api.dependencies import get_service, get_service_resolver
 from chunking.chunk import Chunk
 from retrieval.ranking import RetrievalResult
 
-
 # ---------------------------------------------------------------------------
 # Test doubles
 # ---------------------------------------------------------------------------
+
 
 def _fake_result() -> RetrievalResult:
     return RetrievalResult(
@@ -50,7 +51,12 @@ class MockStreamingService:
         yield {"type": "done"}
 
     def get_metrics(self) -> dict:
-        return {"total_queries": 0, "avg_retrieval_ms": 0, "avg_generation_ms": 0, "errors": 0}
+        return {
+            "total_queries": 0,
+            "avg_retrieval_ms": 0,
+            "avg_generation_ms": 0,
+            "errors": 0,
+        }
 
 
 class MockErrorService:
@@ -70,6 +76,7 @@ class MockErrorService:
 # ---------------------------------------------------------------------------
 # Fixtures
 # ---------------------------------------------------------------------------
+
 
 @pytest.fixture
 def client():
@@ -95,19 +102,21 @@ def error_client():
 # SSE format
 # ---------------------------------------------------------------------------
 
+
 def _parse_sse(raw: str) -> list[dict]:
     """Parse 'data: {...}\\n\\n' lines from a raw SSE response body."""
     events = []
     for line in raw.splitlines():
         line = line.strip()
         if line.startswith("data: "):
-            events.append(json.loads(line[len("data: "):]))
+            events.append(json.loads(line[len("data: ") :]))
     return events
 
 
 # ---------------------------------------------------------------------------
 # Tests
 # ---------------------------------------------------------------------------
+
 
 class TestStreamEndpoint:
     def test_returns_200(self, client):

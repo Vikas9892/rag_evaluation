@@ -33,7 +33,10 @@ def is_abstention(answer: str) -> bool:
     generation-side compliance failure and is better fixed there than papered
     over here with fuzzy matching that would start swallowing real answers.
     """
-    return answer.strip().rstrip(".").casefold() == ABSTENTION_SENTINEL.rstrip(".").casefold()
+    return (
+        answer.strip().rstrip(".").casefold()
+        == ABSTENTION_SENTINEL.rstrip(".").casefold()
+    )
 
 
 class PromptBuilder:

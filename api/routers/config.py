@@ -132,7 +132,14 @@ async def settings(service: RAGService = Depends(get_service)) -> SettingsRespon
                     "Zero, so the same question and context give the same answer — a "
                     "benchmark that moved on its own would measure nothing.",
                 ),
-                setting("llm_max_tokens", "Max tokens", LLM_MAX_TOKENS, "generation", False, False),
+                setting(
+                    "llm_max_tokens",
+                    "Max tokens",
+                    LLM_MAX_TOKENS,
+                    "generation",
+                    False,
+                    False,
+                ),
                 setting(
                     "max_context_chunks",
                     "Context chunks",
@@ -163,7 +170,14 @@ async def settings(service: RAGService = Depends(get_service)) -> SettingsRespon
                     "Fixed when a document is indexed. A new value applies only to "
                     "documents uploaded afterwards.",
                 ),
-                setting("chunk_overlap", "Chunk overlap", CHUNK_OVERLAP, "indexing", True, True),
+                setting(
+                    "chunk_overlap",
+                    "Chunk overlap",
+                    CHUNK_OVERLAP,
+                    "indexing",
+                    True,
+                    True,
+                ),
                 setting(
                     "min_chunk_chars",
                     "Minimum chunk",
@@ -204,14 +218,20 @@ async def deep_health() -> DeepHealthResponse:
 
 
 def _index_check() -> HealthCheck:
-    missing = [p.name for p in (INDEX_DIR / "faiss.index", INDEX_DIR / "metadata.json") if not p.exists()]
+    missing = [
+        p.name
+        for p in (INDEX_DIR / "faiss.index", INDEX_DIR / "metadata.json")
+        if not p.exists()
+    ]
     if missing:
         return HealthCheck(
             name="index",
             status="fail",
             detail=f"missing {', '.join(missing)} — run scripts/build_index.py",
         )
-    return HealthCheck(name="index", status="pass", detail="FAISS index and metadata present")
+    return HealthCheck(
+        name="index", status="pass", detail="FAISS index and metadata present"
+    )
 
 
 def _api_key_check() -> HealthCheck:
@@ -231,6 +251,8 @@ def _disk_check() -> HealthCheck:
     gb = free / 1024**3
     if free < _DISK_WARNING_BYTES:
         return HealthCheck(
-            name="disk", status="warn", detail=f"{gb:.1f} GB free — too little to rebuild the index"
+            name="disk",
+            status="warn",
+            detail=f"{gb:.1f} GB free — too little to rebuild the index",
         )
     return HealthCheck(name="disk", status="pass", detail=f"{gb:.1f} GB free")

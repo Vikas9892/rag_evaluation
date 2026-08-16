@@ -127,7 +127,9 @@ def _build_indexing_queue() -> JobQueue:
         except Exception:
             # A misconfigured Redis must not stop the API from serving. Falling
             # back is loud, not silent.
-            logger.exception("REDIS_URL is set but unusable — falling back to in-process")
+            logger.exception(
+                "REDIS_URL is set but unusable — falling back to in-process"
+            )
 
     logger.info("Indexing queue: in-process worker thread")
     return InProcessQueue()
@@ -168,7 +170,9 @@ def start_indexing_worker() -> None:
             )
         )
     if stranded:
-        logger.info("Requeued %d document(s) left unfinished by a restart", len(stranded))
+        logger.info(
+            "Requeued %d document(s) left unfinished by a restart", len(stranded)
+        )
 
 
 def stop_indexing_worker() -> None:

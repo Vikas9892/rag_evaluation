@@ -22,9 +22,9 @@ class BM25Store:
         from rank_bm25 import BM25Okapi
 
         self._chunks = chunks
-        self._index = BM25Okapi(
-            [c.text.lower().split() for c in chunks]
-        ) if chunks else None
+        self._index = (
+            BM25Okapi([c.text.lower().split() for c in chunks]) if chunks else None
+        )
         logger.info("BM25Store ready: %d documents", len(chunks))
 
     # ------------------------------------------------------------------
@@ -53,13 +53,13 @@ class BM25Store:
                     chunk=self._chunks[idx],
                     score=float(score),
                     rank=rank,
-                    trace=RetrievalTrace(sparse=StageScore(score=float(score), rank=rank)),
+                    trace=RetrievalTrace(
+                        sparse=StageScore(score=float(score), rank=rank)
+                    ),
                 )
             )
 
-        logger.debug(
-            "BM25 query '%.40s...' -> %d result(s)", query, len(results)
-        )
+        logger.debug("BM25 query '%.40s...' -> %d result(s)", query, len(results))
         return results
 
     # ------------------------------------------------------------------

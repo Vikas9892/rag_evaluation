@@ -108,7 +108,11 @@ class GenerationEvaluator:
         logger.info(
             "Generation eval complete | SemanticSim=%.3f | Faithfulness=%s",
             aggregate.avg_semantic_similarity,
-            f"{aggregate.faithfulness_rate:.3f}" if aggregate.faithfulness_rate is not None else "N/A",
+            (
+                f"{aggregate.faithfulness_rate:.3f}"
+                if aggregate.faithfulness_rate is not None
+                else "N/A"
+            ),
         )
         return sample_results, aggregate
 

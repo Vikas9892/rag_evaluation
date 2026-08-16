@@ -10,6 +10,31 @@ permissions:
   contents: read
 
 jobs:
+  # Separate from the test job, and without the index build: linting needs
+  # neither the model weights nor a FAISS index, and waiting ~90s for them to
+  # report an unused import would discourage running it at all.
+  lint:
+    name: "Lint and format"
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install the linters
+        run: pip install ruff black
+
+      - name: Ruff
+        run: python -m ruff check .
+
+      - name: Black
+        run: python -m black --check .
+
   test:
     name: "Python ${{ matrix.python-version }}"
     runs-on: ubuntu-latest

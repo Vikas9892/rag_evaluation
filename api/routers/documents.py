@@ -141,7 +141,11 @@ async def upload_document(
         path, _ = store(corpus_id, document_id, filename, data)
     except (OSError, InvalidCorpusIdError) as exc:
         logger.exception("Could not store upload %s", filename)
-        raise HTTPException(status_code=500, detail="Could not store the uploaded file.")
+        # `from exc` keeps the cause on the traceback the server logs; the
+        # client is told only that storing failed.
+        raise HTTPException(
+            status_code=500, detail="Could not store the uploaded file."
+        ) from exc
 
     repository.add(
         Document(
@@ -331,5 +335,7 @@ async def list_corpora(
         "jobs on restart, which a client showing an indexing spinner should know."
     ),
 )
-async def queue_status(queue: JobQueue = Depends(get_indexing_queue)) -> QueueStatusResponse:
+async def queue_status(
+    queue: JobQueue = Depends(get_indexing_queue),
+) -> QueueStatusResponse:
     return QueueStatusResponse(**queue.describe())

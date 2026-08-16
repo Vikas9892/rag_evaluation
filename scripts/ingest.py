@@ -1,4 +1,5 @@
 """Entry point: ingest all documents from data/raw/ and print a summary."""
+
 import sys
 from pathlib import Path
 
@@ -14,8 +15,10 @@ def main():
     docs = loader.load()
     print(f"\n--- Ingestion complete: {len(docs)} document(s) loaded ---")
     for doc in docs:
-        print(f"  [{doc.metadata.get('type', '?').upper()}] {doc.id} "
-              f"({len(doc.text)} chars)")
+        print(
+            f"  [{doc.metadata.get('type', '?').upper()}] {doc.id} "
+            f"({len(doc.text)} chars)"
+        )
 
 
 if __name__ == "__main__":

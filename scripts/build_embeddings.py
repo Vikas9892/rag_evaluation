@@ -1,4 +1,5 @@
 """End-to-end pipeline: ingest -> chunk -> embed -> save."""
+
 import sys
 from pathlib import Path
 
@@ -31,7 +32,7 @@ def main() -> None:
     print(f"  Documents : {len(docs)}")
     print(f"  Chunks    : {len(chunks)}")
     print(f"  Vectors   : {vectors.shape}")
-    print(f"  Saved to  : index/")
+    print("  Saved to  : index/")
 
 
 if __name__ == "__main__":

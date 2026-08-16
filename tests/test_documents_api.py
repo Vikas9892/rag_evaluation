@@ -17,7 +17,7 @@ from api import dependencies
 from api.app import create_app
 from api.dependencies import get_document_repository, get_indexing_queue
 from corpora import corpus_layout
-from documents import DocumentRepository, DocumentStatus
+from documents import DocumentRepository
 from documents.storage import MAX_UPLOAD_BYTES
 from jobs import DocumentIndexer, IndexingJob, JobQueue
 
@@ -41,7 +41,12 @@ class InlineQueue(JobQueue):
         pass
 
     def describe(self) -> dict:
-        return {"backend": "in-process", "durable": False, "workers": 1, "note": "inline"}
+        return {
+            "backend": "in-process",
+            "durable": False,
+            "workers": 1,
+            "note": "inline",
+        }
 
 
 class FakeEmbedder:
@@ -212,7 +217,9 @@ class TestIndexingLifecycle:
         assert body["progress"] == 1.0
 
     def test_a_failure_is_reported_with_a_reason(self, client):
-        document_id = upload(client, content=b"   \n  ", name="blank.md").json()["document_id"]
+        document_id = upload(client, content=b"   \n  ", name="blank.md").json()[
+            "document_id"
+        ]
         body = client.get(f"/documents/{document_id}/status").json()
 
         assert body["status"] == "FAILED"
@@ -221,9 +228,10 @@ class TestIndexingLifecycle:
 
     def test_status_and_get_return_the_same_record(self, client):
         document_id = upload(client).json()["document_id"]
-        assert client.get(f"/documents/{document_id}").json() == client.get(
-            f"/documents/{document_id}/status"
-        ).json()
+        assert (
+            client.get(f"/documents/{document_id}").json()
+            == client.get(f"/documents/{document_id}/status").json()
+        )
 
     def test_an_unknown_document_is_404(self, client):
         assert client.get("/documents/nope").status_code == 404
@@ -270,7 +278,9 @@ class TestDeletion:
             "documents"
         ][0]["document_id"]
 
-        assert client.delete(f"/documents/{document_id}").json()["corpus_deleted"] is True
+        assert (
+            client.delete(f"/documents/{document_id}").json()["corpus_deleted"] is True
+        )
         assert not corpus_layout("solo").exists
 
     def test_other_documents_survive(self, client):
@@ -283,7 +293,9 @@ class TestDeletion:
         assert body["corpus_deleted"] is False
 
     def test_a_document_that_never_indexed_removes_no_chunks(self, client):
-        document_id = upload(client, content=b"  ", name="blank.md").json()["document_id"]
+        document_id = upload(client, content=b"  ", name="blank.md").json()[
+            "document_id"
+        ]
         body = client.delete(f"/documents/{document_id}").json()
 
         assert body["chunks_removed"] == 0

@@ -4,6 +4,7 @@ The frontend calls this API directly from the browser (ADR 008), so the origin
 allowlist is the only thing between a public endpoint that spends Groq budget
 and every page on the internet.
 """
+
 import pytest
 from fastapi.testclient import TestClient
 
@@ -133,7 +134,9 @@ class TestPreflight:
             .split(",")
         }
 
-        assert served <= allowed, f"not allowed through CORS: {sorted(served - allowed)}"
+        assert (
+            served <= allowed
+        ), f"not allowed through CORS: {sorted(served - allowed)}"
 
     def test_disallowed_origin_preflight_is_rejected(self, client):
         r = self._preflight(client, DENIED)

@@ -71,8 +71,12 @@ class TestSplitterFromConfig:
         text = "Sentence about networking protocols. " * 40
         doc = Document(id="d", source="d.md", text=text)
 
-        few = DocumentSplitter.from_config(ChunkingConfig(chunk_size=400, chunk_overlap=20))
-        many = DocumentSplitter.from_config(ChunkingConfig(chunk_size=120, chunk_overlap=20))
+        few = DocumentSplitter.from_config(
+            ChunkingConfig(chunk_size=400, chunk_overlap=20)
+        )
+        many = DocumentSplitter.from_config(
+            ChunkingConfig(chunk_size=120, chunk_overlap=20)
+        )
 
         assert len(many.split(doc)) > len(few.split(doc))
 
@@ -114,5 +118,7 @@ class TestSettingsEndpoint:
 
     def test_temperature_explains_why_it_is_zero(self, client):
         groups = client.get("/settings").json()["groups"]
-        temperature = next(s for s in groups["generation"] if s["key"] == "llm_temperature")
+        temperature = next(
+            s for s in groups["generation"] if s["key"] == "llm_temperature"
+        )
         assert "measure nothing" in temperature["note"]

@@ -42,9 +42,7 @@ class BaseGenerator(ABC):
         Default implementation raises NotImplementedError — override in
         concrete subclasses that support server-sent streaming (e.g. Groq).
         """
-        raise NotImplementedError(
-            f"{type(self).__name__} does not support streaming"
-        )
+        raise NotImplementedError(f"{type(self).__name__} does not support streaming")
         yield  # make this a generator function even without overriding
 
 

@@ -1,3 +1,20 @@
+[tool.black]
+# Black's default. Pinned rather than left implicit so a contributor with a
+# different default cannot reformat the tree as a side effect of saving a file.
+line-length = 88
+
+[tool.ruff]
+line-length = 88
+
+[tool.ruff.lint]
+# Pyflakes and pycodestyle errors only. This codebase was written without a
+# linter, so turning on the full default set at once would bury the findings
+# that matter — an undefined name, a shadowed test class — under style noise.
+select = ["E", "F"]
+# Formatting is black's job; E501 would only disagree with it about strings
+# and comments that black cannot split.
+ignore = ["E501"]
+
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 addopts = "-q --tb=short"

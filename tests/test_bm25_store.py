@@ -1,14 +1,15 @@
 """Tests for BM25Store keyword retrieval."""
+
 import pytest
 
 from chunking.chunk import Chunk
 from retrieval.bm25_store import BM25Store
 from retrieval.ranking import RetrievalResult
 
-
 # ---------------------------------------------------------------------------
 # Fixtures
 # ---------------------------------------------------------------------------
+
 
 def _make_chunk(idx: int, text: str) -> Chunk:
     return Chunk(
@@ -40,6 +41,7 @@ def store(chunks):
 # Initialisation
 # ---------------------------------------------------------------------------
 
+
 class TestBM25StoreInit:
     def test_ntotal_matches_chunk_count(self, store, chunks):
         assert store.ntotal == len(chunks)
@@ -52,6 +54,7 @@ class TestBM25StoreInit:
 # ---------------------------------------------------------------------------
 # Search — basic behaviour
 # ---------------------------------------------------------------------------
+
 
 class TestBM25Search:
     def test_returns_list(self, store):
@@ -98,6 +101,7 @@ class TestBM25Search:
 # ---------------------------------------------------------------------------
 # Edge cases
 # ---------------------------------------------------------------------------
+
 
 class TestBM25EdgeCases:
     def test_empty_store_returns_empty_list(self):

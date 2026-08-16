@@ -13,6 +13,7 @@ tradeoff is latency: ~50–200 ms per batch on CPU for MiniLM-L-6.
 Default model: cross-encoder/ms-marco-MiniLM-L-6-v2
   — 22 M params, fast on CPU, strong on passage-retrieval benchmarks
 """
+
 from abc import ABC, abstractmethod
 from dataclasses import replace
 from typing import List
@@ -61,9 +62,7 @@ class CrossEncoderReranker(BaseReranker):
         pairs = [(query, r.chunk.text) for r in results]
         scores = self._model.predict(pairs)
 
-        ranked = sorted(
-            zip(results, scores), key=lambda x: float(x[1]), reverse=True
-        )
+        ranked = sorted(zip(results, scores), key=lambda x: float(x[1]), reverse=True)
         reranked = [
             RetrievalResult(
                 chunk=r.chunk,
@@ -73,9 +72,7 @@ class CrossEncoderReranker(BaseReranker):
                 # retrieval table's whole purpose is showing that the reranker
                 # promoted a chunk dense had ninth — which is unanswerable if
                 # reranking discards what came before it.
-                trace=replace(
-                    r.trace, reranker=StageScore(score=float(s), rank=i + 1)
-                ),
+                trace=replace(r.trace, reranker=StageScore(score=float(s), rank=i + 1)),
             )
             for i, (r, s) in enumerate(ranked[:top_k])
         ]

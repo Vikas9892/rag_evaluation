@@ -123,7 +123,9 @@ class Retriever:
                     # This retriever *is* the dense stage, so it records itself.
                     # A caller that fuses will add the other stages around it
                     # rather than recomputing what this one already knows.
-                    trace=RetrievalTrace(dense=StageScore(score=float(score), rank=rank)),
+                    trace=RetrievalTrace(
+                        dense=StageScore(score=float(score), rank=rank)
+                    ),
                 )
             )
 

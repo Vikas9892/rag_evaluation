@@ -1,9 +1,8 @@
 """Unit tests for Phase 5 — generation pipeline."""
+
 import sys
 from pathlib import Path
 from typing import List
-
-import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
@@ -13,10 +12,10 @@ from generation.models import GenerationResponse, Prompt
 from generation.prompt_builder import PromptBuilder, SYSTEM_PROMPT
 from generation.generator import BaseGenerator
 
-
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
 
 def make_chunk(idx: int = 0, doc_id: str = "os.pdf") -> Chunk:
     return Chunk(
@@ -40,6 +39,7 @@ def make_results(n: int) -> List[RetrievalResult]:
 # ---------------------------------------------------------------------------
 # MockGenerator — implements BaseGenerator without any real API call
 # ---------------------------------------------------------------------------
+
 
 class MockGenerator(BaseGenerator):
     def __init__(
@@ -72,6 +72,7 @@ class MockGenerator(BaseGenerator):
 # Prompt dataclass
 # ---------------------------------------------------------------------------
 
+
 class TestPrompt:
     def test_fields_are_set(self):
         p = Prompt(system="sys", user="usr")
@@ -88,6 +89,7 @@ class TestPrompt:
 # ---------------------------------------------------------------------------
 # GenerationResponse dataclass
 # ---------------------------------------------------------------------------
+
 
 class TestGenerationResponse:
     def _response(self, **overrides) -> GenerationResponse:
@@ -127,6 +129,7 @@ class TestGenerationResponse:
 # ---------------------------------------------------------------------------
 # PromptBuilder
 # ---------------------------------------------------------------------------
+
 
 class TestPromptBuilder:
     def test_returns_prompt_object(self):
@@ -201,6 +204,7 @@ class TestPromptBuilder:
 # MockGenerator
 # ---------------------------------------------------------------------------
 
+
 class TestMockGenerator:
     def test_returns_generation_response(self):
         resp = MockGenerator().generate(Prompt("sys", "usr"), make_results(2))
@@ -239,6 +243,7 @@ class TestMockGenerator:
 # ---------------------------------------------------------------------------
 # Integration — PromptBuilder + MockGenerator
 # ---------------------------------------------------------------------------
+
 
 class TestRAGPipelineIntegration:
     def test_full_pipeline_returns_answer(self):

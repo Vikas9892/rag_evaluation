@@ -1,4 +1,5 @@
 """Unit tests for Phase 4 — FAISS retrieval pipeline."""
+
 import sys
 from pathlib import Path
 
@@ -11,7 +12,6 @@ from chunking.chunk import Chunk
 from retrieval.faiss_store import FAISSStore
 from retrieval.ranking import RetrievalResult
 from retrieval.retriever import Retriever
-
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -59,6 +59,7 @@ class MockEmbedder:
 # RetrievalResult
 # ---------------------------------------------------------------------------
 
+
 class TestRetrievalResult:
     def _chunk(self) -> Chunk:
         return Chunk(
@@ -87,6 +88,7 @@ class TestRetrievalResult:
 # ---------------------------------------------------------------------------
 # FAISSStore — creation and population
 # ---------------------------------------------------------------------------
+
 
 class TestFAISSStoreCreation:
     def test_new_store_is_empty(self):
@@ -124,6 +126,7 @@ class TestFAISSStoreCreation:
 # ---------------------------------------------------------------------------
 # FAISSStore — search correctness
 # ---------------------------------------------------------------------------
+
 
 class TestFAISSStoreSearch:
     def test_search_returns_top_k_results(self):
@@ -190,6 +193,7 @@ class TestFAISSStoreSearch:
 # FAISSStore — persistence
 # ---------------------------------------------------------------------------
 
+
 class TestFAISSStorePersistence:
     def test_save_and_load_ntotal_preserved(self, tmp_path):
         store = FAISSStore(8)
@@ -235,6 +239,7 @@ class TestFAISSStorePersistence:
 # ---------------------------------------------------------------------------
 # Retriever
 # ---------------------------------------------------------------------------
+
 
 class TestRetriever:
     def _build(self, n: int = 8) -> tuple:
@@ -307,7 +312,6 @@ class TestRetriever:
 
     def test_retriever_from_disk(self, tmp_path):
         """End-to-end: save index + metadata -> load via from_disk -> retrieve."""
-        import json
         from embeddings.storage import VectorStorage
 
         vecs = rand_vecs(6)

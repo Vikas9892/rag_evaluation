@@ -197,7 +197,9 @@ class TestFilenameSafety:
     def test_caps_the_length(self):
         assert len(safe_display_name("a" * 500 + ".pdf")) <= 120
 
-    def test_the_stored_file_is_named_by_id_not_by_the_upload(self, tmp_path, monkeypatch):
+    def test_the_stored_file_is_named_by_id_not_by_the_upload(
+        self, tmp_path, monkeypatch
+    ):
         # Even a name that survives sanitising cannot collide with another.
         monkeypatch.setattr("documents.storage.UPLOAD_ROOT", tmp_path)
         path, _ = store("workspace", "docid123", "report.pdf", b"data")
@@ -219,7 +221,9 @@ class TestValidation:
     def test_accepts_the_formats_a_parser_exists_for(self, name):
         validate(name, 1024)
 
-    @pytest.mark.parametrize("name", ["a.docx", "a.exe", "a.zip", "noextension", "a.pdf.exe"])
+    @pytest.mark.parametrize(
+        "name", ["a.docx", "a.exe", "a.zip", "noextension", "a.pdf.exe"]
+    )
     def test_refuses_anything_with_no_parser(self, name):
         # Accepting a format nothing can parse produces a document that never
         # leaves PARSING.

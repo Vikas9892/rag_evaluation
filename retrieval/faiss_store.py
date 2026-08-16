@@ -88,9 +88,7 @@ class FAISSStore:
         path = Path(path)
         path.parent.mkdir(parents=True, exist_ok=True)
         faiss.write_index(self._index, str(path))
-        logger.info(
-            "Saved FAISS index (%d vectors) to %s", self._index.ntotal, path
-        )
+        logger.info("Saved FAISS index (%d vectors) to %s", self._index.ntotal, path)
 
     @classmethod
     def load(cls, path: Path | str = FAISS_INDEX_FILE) -> "FAISSStore":

@@ -34,7 +34,9 @@ async def query_endpoint(
     # Which corpus to load is part of what was asked, so it comes from the body.
     service = resolve_service(request.corpus_id)
     if not request.question.strip():
-        raise HTTPException(status_code=400, detail="Question cannot be empty or whitespace")
+        raise HTTPException(
+            status_code=400, detail="Question cannot be empty or whitespace"
+        )
 
     try:
         result = service.answer(

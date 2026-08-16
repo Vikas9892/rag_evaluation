@@ -4,7 +4,6 @@ from typing import List
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.openapi.utils import get_openapi
 
 from api.dependencies import start_indexing_worker, stop_indexing_worker
 from api.rate_limit import TokenBucketLimiter, rate_limit_middleware
@@ -36,6 +35,7 @@ def resolve_allowed_origins(raw: str | None = None) -> List[str]:
             "Set an explicit allowlist in any deployment that costs money."
         )
     return origins
+
 
 # Generous enough that a person clicking around never notices, tight enough
 # that a script pointed at /query cannot run up a bill unattended.

@@ -11,6 +11,7 @@ An error event can arrive *after* tokens have already been sent: the failure may
 happen part-way through generation. Clients should keep what they have received
 and report the failure alongside it rather than discarding a partial answer.
 """
+
 import json
 
 from typing import Callable
@@ -53,7 +54,9 @@ async def stream_endpoint(
 ) -> StreamingResponse:
     service = resolve_service(request.corpus_id)
     if not request.question.strip():
-        raise HTTPException(status_code=400, detail="Question cannot be empty or whitespace")
+        raise HTTPException(
+            status_code=400, detail="Question cannot be empty or whitespace"
+        )
 
     def event_generator():
         try:
@@ -66,7 +69,9 @@ async def stream_endpoint(
                 yield f"data: {json.dumps(event)}\n\n"
         except NotImplementedError as exc:
             yield f"data: {json.dumps({'type': 'error', 'data': str(exc)})}\n\n"
-        except Exception as exc:
+        except Exception:
+            # Deliberately unbound: the detail goes to the log, never to the
+            # client, so an internal error cannot leak through the stream.
             logger.exception("Error in /stream")
             yield f"data: {json.dumps({'type': 'error', 'data': 'Internal server error'})}\n\n"
 

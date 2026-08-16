@@ -4,6 +4,7 @@ The final class is the regression guard for the failure that motivated this
 module: labels anchored to positional chunk IDs silently re-pointed at
 different text when the corpus was re-chunked, and nothing failed.
 """
+
 import json
 import sys
 from pathlib import Path
@@ -22,7 +23,10 @@ from evaluation.ground_truth import ChunkResolver, GroundTruthError
 
 RECORDS = [
     {"chunk_id": "doc_chunk_0000", "text": "# Title Only"},
-    {"chunk_id": "doc_chunk_0001", "text": "Paging divides memory into\nfixed-size pages."},
+    {
+        "chunk_id": "doc_chunk_0001",
+        "text": "Paging divides memory into\nfixed-size pages.",
+    },
     {"chunk_id": "doc_chunk_0002", "text": "- FIFO\n- LRU (Least Recently Used)"},
 ]
 
@@ -43,7 +47,9 @@ class TestResolve:
 
     def test_normalises_whitespace_across_line_breaks(self, resolver):
         # The span is authored on one line; the chunk wraps it across two.
-        assert resolver.resolve("divides memory into fixed-size pages") == "doc_chunk_0001"
+        assert (
+            resolver.resolve("divides memory into fixed-size pages") == "doc_chunk_0001"
+        )
 
     def test_tolerates_extra_whitespace_in_span(self, resolver):
         assert resolver.resolve("-  FIFO") == "doc_chunk_0002"
@@ -109,39 +115,69 @@ class TestDatasetLoaderResolution:
         return p
 
     def test_resolves_spans_into_chunk_ids(self, tmp_path, resolver):
-        p = self._write(tmp_path, [{
-            "id": 1, "question": "Q?", "expected_answer": "A.",
-            "expected_answer_spans": ["LRU (Least Recently Used)"],
-        }])
+        p = self._write(
+            tmp_path,
+            [
+                {
+                    "id": 1,
+                    "question": "Q?",
+                    "expected_answer": "A.",
+                    "expected_answer_spans": ["LRU (Least Recently Used)"],
+                }
+            ],
+        )
         samples = DatasetLoader.load(p, resolver=resolver)
         assert samples[0].expected_chunk_ids == ["doc_chunk_0002"]
 
     def test_spans_without_resolver_raise(self, tmp_path):
-        p = self._write(tmp_path, [{
-            "id": 7, "question": "Q?", "expected_answer": "A.",
-            "expected_answer_spans": ["FIFO"],
-        }])
+        p = self._write(
+            tmp_path,
+            [
+                {
+                    "id": 7,
+                    "question": "Q?",
+                    "expected_answer": "A.",
+                    "expected_answer_spans": ["FIFO"],
+                }
+            ],
+        )
         with pytest.raises(GroundTruthError, match="no ChunkResolver"):
             DatasetLoader.load(p)
 
     def test_error_names_the_offending_question(self, tmp_path, resolver):
-        p = self._write(tmp_path, [{
-            "id": 42, "question": "Q?", "expected_answer": "A.",
-            "expected_answer_spans": ["text that does not exist"],
-        }])
+        p = self._write(
+            tmp_path,
+            [
+                {
+                    "id": 42,
+                    "question": "Q?",
+                    "expected_answer": "A.",
+                    "expected_answer_spans": ["text that does not exist"],
+                }
+            ],
+        )
         with pytest.raises(GroundTruthError, match="Question 42"):
             DatasetLoader.load(p, resolver=resolver)
 
     def test_legacy_chunk_ids_still_load(self, tmp_path):
         """Fixtures may use literal IDs so unit tests need no index."""
-        p = self._write(tmp_path, [{
-            "id": 1, "question": "Q?", "expected_answer": "A.",
-            "expected_chunk_ids": ["c1"],
-        }])
+        p = self._write(
+            tmp_path,
+            [
+                {
+                    "id": 1,
+                    "question": "Q?",
+                    "expected_answer": "A.",
+                    "expected_chunk_ids": ["c1"],
+                }
+            ],
+        )
         assert DatasetLoader.load(p)[0].expected_chunk_ids == ["c1"]
 
     def test_entry_with_no_ground_truth_raises(self, tmp_path):
-        p = self._write(tmp_path, [{"id": 3, "question": "Q?", "expected_answer": "A."}])
+        p = self._write(
+            tmp_path, [{"id": 3, "question": "Q?", "expected_answer": "A."}]
+        )
         with pytest.raises(GroundTruthError, match="declares no ground truth"):
             DatasetLoader.load(p)
 
@@ -183,4 +219,6 @@ class TestShippedDatasetIntegrity:
         samples = DatasetLoader.load(DATASET_PATH, resolver=ChunkResolver.from_disk())
         for s in samples:
             for cid in s.expected_chunk_ids:
-                assert cid in index_ids, f"Question {s.id} resolved to unknown chunk {cid}"
+                assert (
+                    cid in index_ids
+                ), f"Question {s.id} resolved to unknown chunk {cid}"

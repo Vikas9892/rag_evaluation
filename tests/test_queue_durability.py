@@ -131,7 +131,10 @@ class TestQueueSelection:
         monkeypatch.delenv("REDIS_URL", raising=False)
         dependencies._build_indexing_queue.cache_clear()
         try:
-            assert dependencies._build_indexing_queue().describe()["backend"] == "in-process"
+            assert (
+                dependencies._build_indexing_queue().describe()["backend"]
+                == "in-process"
+            )
         finally:
             dependencies._build_indexing_queue.cache_clear()
 
@@ -191,7 +194,9 @@ class TestRestartRecovery:
                 enqueued.append(job)
 
         monkeypatch.setattr(dependencies, "get_document_repository", lambda: repo)
-        monkeypatch.setattr(dependencies, "get_indexing_queue", lambda: CapturingQueue())
+        monkeypatch.setattr(
+            dependencies, "get_indexing_queue", lambda: CapturingQueue()
+        )
 
         dependencies.start_indexing_worker()
 
@@ -222,7 +227,9 @@ class TestRestartRecovery:
                 enqueued.append(job)
 
         monkeypatch.setattr(dependencies, "get_document_repository", lambda: repo)
-        monkeypatch.setattr(dependencies, "get_indexing_queue", lambda: CapturingQueue())
+        monkeypatch.setattr(
+            dependencies, "get_indexing_queue", lambda: CapturingQueue()
+        )
 
         dependencies.start_indexing_worker()
 

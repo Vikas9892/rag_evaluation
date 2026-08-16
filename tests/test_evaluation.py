@@ -1,4 +1,5 @@
 """Unit tests for Phase 6 — evaluation pipeline."""
+
 import json
 import sys
 from pathlib import Path
@@ -32,10 +33,10 @@ from evaluation.generation_evaluator import GenerationEvaluator
 from evaluation.benchmark import BenchmarkResult, BenchmarkRunner
 from evaluation.report import ReportGenerator
 
-
 # ---------------------------------------------------------------------------
 # Test doubles
 # ---------------------------------------------------------------------------
+
 
 class MockRetriever:
     """Returns a fixed list of RetrievalResult for every query."""
@@ -43,7 +44,9 @@ class MockRetriever:
     def __init__(self, results: List[RetrievalResult]) -> None:
         self._results = results
 
-    def retrieve(self, query: str, top_k: int = 5) -> List[RetrievalResult]:  # noqa: ARG002
+    def retrieve(
+        self, query: str, top_k: int = 5
+    ) -> List[RetrievalResult]:  # noqa: ARG002
         return self._results[:top_k]
 
 
@@ -51,7 +54,11 @@ class MockEmbedder:
     dimension = 4
 
     def __init__(self, vector: np.ndarray | None = None) -> None:
-        self._vector = vector if vector is not None else np.array([1.0, 0.0, 0.0, 0.0], dtype=np.float32)
+        self._vector = (
+            vector
+            if vector is not None
+            else np.array([1.0, 0.0, 0.0, 0.0], dtype=np.float32)
+        )
 
     def embed(self, text: str) -> np.ndarray:  # noqa: ARG002
         return self._vector
@@ -61,7 +68,9 @@ class MockGenerator(BaseGenerator):
     def __init__(self, answer: str = "Mock answer.") -> None:
         self._answer = answer
 
-    def generate(self, prompt: Prompt, sources: List[RetrievalResult]) -> GenerationResponse:
+    def generate(
+        self, prompt: Prompt, sources: List[RetrievalResult]
+    ) -> GenerationResponse:
         return GenerationResponse(
             answer=self._answer,
             sources=sources,
@@ -108,6 +117,7 @@ def make_sample(
 # BenchmarkSample
 # ---------------------------------------------------------------------------
 
+
 class TestBenchmarkSample:
     def test_fields_are_set(self):
         s = make_sample(1, "Q?", "A.", ["c1", "c2"])
@@ -127,6 +137,7 @@ class TestBenchmarkSample:
 # DatasetLoader
 # ---------------------------------------------------------------------------
 
+
 class TestDatasetLoader:
     def test_loads_json_file(self, tmp_path):
         data = [
@@ -144,7 +155,15 @@ class TestDatasetLoader:
         assert samples[0].question == "Q?"
 
     def test_returns_list_of_benchmark_samples(self, tmp_path):
-        data = [{"id": i, "question": f"Q{i}?", "expected_answer": "A.", "expected_chunk_ids": []} for i in range(3)]
+        data = [
+            {
+                "id": i,
+                "question": f"Q{i}?",
+                "expected_answer": "A.",
+                "expected_chunk_ids": [],
+            }
+            for i in range(3)
+        ]
         p = tmp_path / "ds.json"
         p.write_text(json.dumps(data), encoding="utf-8")
         samples = DatasetLoader.load(p)
@@ -179,15 +198,20 @@ class TestDatasetLoader:
 # Metrics — precision
 # ---------------------------------------------------------------------------
 
+
 class TestPrecisionAtK:
     def test_all_relevant(self):
-        assert precision_at_k(["a", "b", "c"], ["a", "b", "c"], k=3) == pytest.approx(1.0)
+        assert precision_at_k(["a", "b", "c"], ["a", "b", "c"], k=3) == pytest.approx(
+            1.0
+        )
 
     def test_none_relevant(self):
         assert precision_at_k(["x", "y"], ["a", "b"], k=2) == pytest.approx(0.0)
 
     def test_partial(self):
-        assert precision_at_k(["a", "x", "b", "y"], ["a", "b"], k=4) == pytest.approx(0.5)
+        assert precision_at_k(["a", "x", "b", "y"], ["a", "b"], k=4) == pytest.approx(
+            0.5
+        )
 
     def test_k_clips_list(self):
         # Only first k items considered
@@ -203,6 +227,7 @@ class TestPrecisionAtK:
 # ---------------------------------------------------------------------------
 # Metrics — recall
 # ---------------------------------------------------------------------------
+
 
 class TestRecallAtK:
     def test_full_recall(self):
@@ -225,6 +250,7 @@ class TestRecallAtK:
 # Metrics — hit rate
 # ---------------------------------------------------------------------------
 
+
 class TestHitRate:
     def test_hit(self):
         assert hit_rate(["x", "a", "y"], ["a"]) == pytest.approx(1.0)
@@ -242,6 +268,7 @@ class TestHitRate:
 # ---------------------------------------------------------------------------
 # Metrics — reciprocal rank
 # ---------------------------------------------------------------------------
+
 
 class TestReciprocalRank:
     def test_rank_1(self):
@@ -276,6 +303,7 @@ class TestMeanReciprocalRank:
 # Metrics — cosine similarity
 # ---------------------------------------------------------------------------
 
+
 class TestCosineSimilarity:
     def test_identical_vectors_return_one(self):
         v = np.array([1.0, 2.0, 3.0])
@@ -286,7 +314,9 @@ class TestCosineSimilarity:
         assert cosine_similarity(v, -v) == pytest.approx(-1.0)
 
     def test_orthogonal_vectors_return_zero(self):
-        assert cosine_similarity(np.array([1.0, 0.0]), np.array([0.0, 1.0])) == pytest.approx(0.0)
+        assert cosine_similarity(
+            np.array([1.0, 0.0]), np.array([0.0, 1.0])
+        ) == pytest.approx(0.0)
 
     def test_zero_vector_returns_zero(self):
         assert cosine_similarity(np.zeros(3), np.array([1.0, 2.0, 3.0])) == 0.0
@@ -304,6 +334,7 @@ class TestCosineSimilarity:
 # RetrievalEvaluator
 # ---------------------------------------------------------------------------
 
+
 class TestRetrievalEvaluator:
     def _evaluator(self, retrieved_ids: List[str]) -> RetrievalEvaluator:
         results = [make_result(cid, rank=i + 1) for i, cid in enumerate(retrieved_ids)]
@@ -318,9 +349,7 @@ class TestRetrievalEvaluator:
     def test_perfect_retrieval_precision_one(self):
         ids = [f"chunk_{i:04d}" for i in range(5)]
         ev = RetrievalEvaluator(MockRetriever([make_result(i) for i in ids]), top_k=5)
-        samples, agg = ev.evaluate(
-            [make_sample(expected_chunk_ids=ids)]
-        )
+        samples, agg = ev.evaluate([make_sample(expected_chunk_ids=ids)])
         assert agg.precision_at_k == pytest.approx(1.0)
 
     def test_miss_gives_zero_hit_rate(self):
@@ -354,9 +383,11 @@ class TestRetrievalEvaluator:
 # GenerationEvaluator
 # ---------------------------------------------------------------------------
 
+
 class TestGenerationEvaluator:
     def _ev(self, generator=None, embedder=None, faithfulness_generator=None):
         from generation.prompt_builder import PromptBuilder
+
         return GenerationEvaluator(
             generator=generator or MockGenerator(),
             builder=PromptBuilder(),
@@ -370,6 +401,7 @@ class TestGenerationEvaluator:
             make_sample(), retrieved_results=[make_result("c1")]
         )
         from evaluation.generation_evaluator import GenerationSampleResult
+
         assert isinstance(result, GenerationSampleResult)
 
     def test_semantic_similarity_is_one_for_identical_vectors(self):
@@ -402,7 +434,9 @@ class TestGenerationEvaluator:
     def test_aggregate_faithfulness_rate(self):
         ev = self._ev(faithfulness_generator=MockGenerator(answer="FAITHFUL"))
         samples = [make_sample(i, f"Q{i}?") for i in range(4)]
-        results, agg = ev.evaluate(samples, {s.id: [make_result("c1")] for s in samples})
+        results, agg = ev.evaluate(
+            samples, {s.id: [make_result("c1")] for s in samples}
+        )
         assert agg.faithfulness_rate == pytest.approx(1.0)
 
     def test_aggregate_returns_none_faithfulness_when_no_judge(self):
@@ -416,9 +450,11 @@ class TestGenerationEvaluator:
 # BenchmarkRunner
 # ---------------------------------------------------------------------------
 
+
 class TestBenchmarkRunner:
     def _runner(self, retrieved_ids=None, answer="Answer.", faithfulness_answer=None):
         from generation.prompt_builder import PromptBuilder
+
         ids = retrieved_ids or ["doc_chunk_0000"]
         retriever = MockRetriever([make_result(i, r) for r, i in enumerate(ids, 1)])
         faith_gen = MockGenerator(faithfulness_answer) if faithfulness_answer else None
@@ -427,7 +463,10 @@ class TestBenchmarkRunner:
             generator=MockGenerator(answer=answer),
             embedder=MockEmbedder(),
             builder=PromptBuilder(),
-            dataset=[make_sample(i, f"Q{i}?", expected_chunk_ids=["doc_chunk_0000"]) for i in range(1, 4)],
+            dataset=[
+                make_sample(i, f"Q{i}?", expected_chunk_ids=["doc_chunk_0000"])
+                for i in range(1, 4)
+            ],
             top_k=3,
             faithfulness_generator=faith_gen,
         )
@@ -470,9 +509,11 @@ class TestBenchmarkRunner:
 # ReportGenerator
 # ---------------------------------------------------------------------------
 
+
 class TestReportGenerator:
     def _result(self) -> BenchmarkResult:
         from generation.prompt_builder import PromptBuilder
+
         runner = BenchmarkRunner(
             retriever=MockRetriever([make_result("doc_chunk_0000")]),
             generator=MockGenerator(),
@@ -490,6 +531,7 @@ class TestReportGenerator:
 
     def test_csv_has_rows(self, tmp_path):
         import csv as _csv
+
         rg = ReportGenerator(tmp_path)
         path = rg.save_csv(self._result())
         rows = list(_csv.DictReader(path.open(encoding="utf-8")))
@@ -497,6 +539,7 @@ class TestReportGenerator:
 
     def test_csv_contains_expected_columns(self, tmp_path):
         import csv as _csv
+
         rg = ReportGenerator(tmp_path)
         path = rg.save_csv(self._result())
         row = next(_csv.DictReader(path.open(encoding="utf-8")))
@@ -526,7 +569,10 @@ class TestReportGenerator:
 
     def test_experiment_csv_saved(self, tmp_path):
         rg = ReportGenerator(tmp_path)
-        rows = [{"chunk_size": 256, "precision_at_5": 0.8}, {"chunk_size": 512, "precision_at_5": 0.9}]
+        rows = [
+            {"chunk_size": 256, "precision_at_5": 0.8},
+            {"chunk_size": 512, "precision_at_5": 0.9},
+        ]
         path = rg.save_experiment_csv(rows)
         assert path.exists()
 

@@ -1,7 +1,4 @@
 """Tests for incremental index updates (VectorStorage.append + FAISSStore.add)."""
-import json
-import tempfile
-from pathlib import Path
 
 import numpy as np
 import pytest
@@ -9,7 +6,6 @@ import pytest
 from chunking.chunk import Chunk
 from embeddings.storage import VectorStorage
 from retrieval.faiss_store import FAISSStore
-
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -39,6 +35,7 @@ def _make_chunks(start: int, count: int) -> list[Chunk]:
 # ---------------------------------------------------------------------------
 # FAISSStore.add — incremental vector insertion
 # ---------------------------------------------------------------------------
+
 
 class TestFAISSStoreAdd:
     def test_add_increases_ntotal(self):
@@ -73,6 +70,7 @@ class TestFAISSStoreAdd:
 # ---------------------------------------------------------------------------
 # VectorStorage.append — combined vectors + metadata
 # ---------------------------------------------------------------------------
+
 
 class TestVectorStorageAppend:
     @pytest.fixture

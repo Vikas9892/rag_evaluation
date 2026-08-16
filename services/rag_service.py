@@ -2,7 +2,7 @@ import json
 import time
 import uuid
 from dataclasses import dataclass, field
-from typing import Generator, Iterator, List, Optional
+from typing import Generator, List, Optional
 
 from config.logging_config import get_logger
 from config.settings import TOP_K
@@ -42,11 +42,15 @@ class _ServiceMetrics:
 
     @property
     def avg_retrieval_ms(self) -> float:
-        return self.total_retrieval_ms / self.total_queries if self.total_queries else 0.0
+        return (
+            self.total_retrieval_ms / self.total_queries if self.total_queries else 0.0
+        )
 
     @property
     def avg_generation_ms(self) -> float:
-        return self.total_generation_ms / self.total_queries if self.total_queries else 0.0
+        return (
+            self.total_generation_ms / self.total_queries if self.total_queries else 0.0
+        )
 
     def as_dict(self) -> dict:
         return {
@@ -136,17 +140,19 @@ class RAGService:
             raise
 
         logger.info(
-            json.dumps({
-                "event": "query",
-                "request_id": request_id,
-                "retriever": retriever,
-                "question_len": len(question),
-                "chunks_retrieved": len(results),
-                "retrieval_ms": round(retrieval_ms, 1),
-                "generation_ms": round(response.latency_ms, 1),
-                "total_ms": round(retrieval_ms + response.latency_ms, 1),
-                "tokens": response.total_tokens,
-            })
+            json.dumps(
+                {
+                    "event": "query",
+                    "request_id": request_id,
+                    "retriever": retriever,
+                    "question_len": len(question),
+                    "chunks_retrieved": len(results),
+                    "retrieval_ms": round(retrieval_ms, 1),
+                    "generation_ms": round(response.latency_ms, 1),
+                    "total_ms": round(retrieval_ms + response.latency_ms, 1),
+                    "tokens": response.total_tokens,
+                }
+            )
         )
 
         return RAGResponse(
@@ -235,20 +241,22 @@ class RAGService:
             raise
 
         logger.info(
-            json.dumps({
-                "event": "stream",
-                "request_id": request_id,
-                "retriever": retriever,
-                "question_len": len(question),
-                "chunks_retrieved": len(results),
-                "retrieval_ms": round(retrieval_ms, 1),
-                "generation_ms": round(generation_ms, 1),
-                "first_token_ms": (
-                    round(first_token_ms, 1) if first_token_ms is not None else None
-                ),
-                "total_ms": round(retrieval_ms + generation_ms, 1),
-                "tokens": token_count,
-            })
+            json.dumps(
+                {
+                    "event": "stream",
+                    "request_id": request_id,
+                    "retriever": retriever,
+                    "question_len": len(question),
+                    "chunks_retrieved": len(results),
+                    "retrieval_ms": round(retrieval_ms, 1),
+                    "generation_ms": round(generation_ms, 1),
+                    "first_token_ms": (
+                        round(first_token_ms, 1) if first_token_ms is not None else None
+                    ),
+                    "total_ms": round(retrieval_ms + generation_ms, 1),
+                    "tokens": token_count,
+                }
+            )
         )
 
         yield {

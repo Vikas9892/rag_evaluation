@@ -35,6 +35,7 @@ Matching is whitespace-normalised so that labels survive re-flowing, changed
 line breaks, and separator tweaks — the failure mode this module exists to
 prevent must not be reintroduced by brittle string comparison.
 """
+
 import json
 from pathlib import Path
 from typing import Dict, List, Sequence
@@ -122,7 +123,9 @@ class ChunkResolver:
         a set, so duplicates collapse.
         """
         if not spans:
-            raise GroundTruthError("A ground-truth entry must declare at least one span")
+            raise GroundTruthError(
+                "A ground-truth entry must declare at least one span"
+            )
 
         resolved: List[str] = []
         for span in spans:

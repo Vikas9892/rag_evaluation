@@ -18,7 +18,13 @@ from retrieval.ranking import RetrievalResult
 
 
 def _chunk(cid: str) -> Chunk:
-    return Chunk(chunk_id=cid, document_id="dbms.md", text="acid durability", start_char=0, end_char=15)
+    return Chunk(
+        chunk_id=cid,
+        document_id="dbms.md",
+        text="acid durability",
+        start_char=0,
+        end_char=15,
+    )
 
 
 class StubRetriever:
@@ -27,12 +33,17 @@ class StubRetriever:
     def __init__(self) -> None:
         self.calls: List[dict] = []
 
-    def retrieve(self, question: str, top_k: int, mode: str = "hybrid", reranker: bool = False):
+    def retrieve(
+        self, question: str, top_k: int, mode: str = "hybrid", reranker: bool = False
+    ):
         self.calls.append(
             {"question": question, "top_k": top_k, "mode": mode, "reranker": reranker}
         )
         ids = [f"c{i}" for i in range(top_k)]
-        return [RetrievalResult(chunk=_chunk(cid), score=1.0 - i / 10, rank=i + 1) for i, cid in enumerate(ids)]
+        return [
+            RetrievalResult(chunk=_chunk(cid), score=1.0 - i / 10, rank=i + 1)
+            for i, cid in enumerate(ids)
+        ]
 
 
 class StubService:
@@ -50,7 +61,12 @@ class StubService:
         return 3
 
     def get_metrics(self) -> dict:
-        return {"total_queries": 0, "avg_retrieval_ms": 0, "avg_generation_ms": 0, "errors": 0}
+        return {
+            "total_queries": 0,
+            "avg_retrieval_ms": 0,
+            "avg_generation_ms": 0,
+            "errors": 0,
+        }
 
 
 @pytest.fixture(autouse=True)
@@ -80,14 +96,20 @@ class TestConfig:
         assert body["documents"] == 3
 
     def test_lists_the_retrievers_the_api_accepts(self, client):
-        assert client.get("/config").json()["retrievers"] == ["dense", "sparse", "hybrid"]
+        assert client.get("/config").json()["retrievers"] == [
+            "dense",
+            "sparse",
+            "hybrid",
+        ]
 
     def test_reports_the_reranker_as_off(self, client):
         # It is implemented but not in the live path, and the pipeline trace
         # says skipped. Claiming otherwise here would contradict that.
         assert client.get("/config").json()["reranker_enabled"] is False
 
-    def test_exposes_the_models_rather_than_leaving_the_ui_to_hardcode_them(self, client):
+    def test_exposes_the_models_rather_than_leaving_the_ui_to_hardcode_them(
+        self, client
+    ):
         body = client.get("/config").json()
         assert body["embedding_model"]
         assert body["llm_model"]

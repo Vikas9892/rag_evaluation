@@ -137,8 +137,6 @@ class VectorStorage:
             raise FileNotFoundError(f"Metadata file not found: {self.metadata_path}")
 
         vectors = np.load(str(self.vectors_path))
-        records: List[Dict] = json.loads(
-            self.metadata_path.read_text(encoding="utf-8")
-        )
+        records: List[Dict] = json.loads(self.metadata_path.read_text(encoding="utf-8"))
         logger.info("Loaded %d vectors from %s", len(records), self.vectors_path)
         return vectors, records

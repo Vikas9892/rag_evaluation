@@ -1,4 +1,5 @@
 """Run the full evaluation benchmark and save reports to reports/."""
+
 import sys
 from pathlib import Path
 
@@ -58,10 +59,8 @@ def main() -> None:
 
     class _PassthroughGenerator(BaseGenerator):
         """Returns the expected answer unchanged — no API call."""
+
         def generate(self, prompt, sources):
-            question_line = next(
-                (l for l in prompt.user.splitlines() if "Question:" in l), ""
-            )
             return GenerationResponse(
                 answer="(generation skipped — set GROQ_API_KEY to enable)",
                 sources=sources,
@@ -73,7 +72,7 @@ def main() -> None:
     active_generator = generator or _PassthroughGenerator()
     faithfulness_generator = generator  # None unless Groq is available
 
-    print(f"Running Benchmark...")
+    print("Running Benchmark...")
     print(f"Questions: {len(dataset)}\n")
 
     runner = BenchmarkRunner(

@@ -1,4 +1,5 @@
 """Unit tests for Phase 3 — embedding pipeline."""
+
 import sys
 from pathlib import Path
 
@@ -13,10 +14,10 @@ from embeddings.service import EmbeddingService
 from embeddings.storage import VectorStorage
 import types
 
-
 # ---------------------------------------------------------------------------
 # Session-scoped fixtures — model loads once for the entire test run
 # ---------------------------------------------------------------------------
+
 
 @pytest.fixture(scope="session")
 def embedder() -> Embedder:
@@ -31,6 +32,7 @@ def service(embedder: Embedder) -> EmbeddingService:
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
 
 def cosine_sim(a: np.ndarray, b: np.ndarray) -> float:
     return float(np.dot(a, b) / (np.linalg.norm(a) * np.linalg.norm(b)))
@@ -51,6 +53,7 @@ def make_chunk(idx: int, text: str = "") -> Chunk:
 # ---------------------------------------------------------------------------
 # Embedder — shape and dtype
 # ---------------------------------------------------------------------------
+
 
 class TestEmbedderShape:
     def test_embed_returns_1d_array(self, embedder):
@@ -92,6 +95,7 @@ class TestEmbedderShape:
 # Embedder — semantic correctness
 # ---------------------------------------------------------------------------
 
+
 class TestEmbedderSemantics:
     def test_embed_is_deterministic(self, embedder):
         text = "Deadlock occurs when processes are unable to proceed."
@@ -112,7 +116,9 @@ class TestEmbedderSemantics:
 
     def test_similar_texts_have_higher_cosine_sim_than_dissimilar(self, embedder):
         v_a = embedder.embed("The CPU scheduler selects processes for execution.")
-        v_b = embedder.embed("Process scheduling decides which process runs on the CPU.")
+        v_b = embedder.embed(
+            "Process scheduling decides which process runs on the CPU."
+        )
         v_c = embedder.embed("A banana is a tropical fruit with yellow skin.")
         assert cosine_sim(v_a, v_b) > cosine_sim(v_a, v_c)
 
@@ -130,6 +136,7 @@ class TestEmbedderSemantics:
 # ---------------------------------------------------------------------------
 # EmbeddingService
 # ---------------------------------------------------------------------------
+
 
 class TestEmbeddingService:
     def test_embed_chunks_correct_shape(self, service):
@@ -169,6 +176,7 @@ class TestEmbeddingService:
 # VectorStorage
 # ---------------------------------------------------------------------------
 
+
 class TestVectorStorage:
     def _make_vectors(self, n: int, dim: int = 384) -> np.ndarray:
         rng = np.random.default_rng(42)
@@ -206,7 +214,14 @@ class TestVectorStorage:
         chunks = self._make_chunks(3)
         storage.save(self._make_vectors(3), chunks)
         _, records = storage.load()
-        required = {"chunk_id", "document_id", "text", "start_char", "end_char", "metadata"}
+        required = {
+            "chunk_id",
+            "document_id",
+            "text",
+            "start_char",
+            "end_char",
+            "metadata",
+        }
         for rec in records:
             assert required.issubset(rec.keys())
 
@@ -362,6 +377,8 @@ class TestSharedEmbedder:
         from retrieval.retriever import Retriever
 
         injected = Embedder()
-        retriever = Retriever(store=types.SimpleNamespace(ntotal=0), metadata=[], embedder=injected)
+        retriever = Retriever(
+            store=types.SimpleNamespace(ntotal=0), metadata=[], embedder=injected
+        )
 
         assert retriever._embedder is injected

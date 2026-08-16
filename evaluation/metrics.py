@@ -1,12 +1,13 @@
 """Pure metric functions — no I/O, no side effects, trivially testable."""
+
 from typing import List
 
 import numpy as np
 
-
 # ---------------------------------------------------------------------------
 # Retrieval metrics
 # ---------------------------------------------------------------------------
+
 
 def precision_at_k(retrieved_ids: List[str], relevant_ids: List[str], k: int) -> float:
     """Fraction of the top-k retrieved items that are relevant.
@@ -59,6 +60,7 @@ def mean_reciprocal_rank(rrs: List[float]) -> float:
 # ---------------------------------------------------------------------------
 # Similarity metric
 # ---------------------------------------------------------------------------
+
 
 def cosine_similarity(a: np.ndarray, b: np.ndarray) -> float:
     """Cosine similarity between two 1-D float arrays, in [-1, 1].

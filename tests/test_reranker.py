@@ -1,4 +1,5 @@
 """Tests for CrossEncoderReranker — mocked to avoid model downloads."""
+
 from unittest.mock import MagicMock, patch
 
 import numpy as np
@@ -8,10 +9,10 @@ from chunking.chunk import Chunk
 from retrieval.ranking import RetrievalResult
 from retrieval.reranker import BaseReranker, CrossEncoderReranker
 
-
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
 
 def _result(idx: int, score: float = 0.5) -> RetrievalResult:
     chunk = Chunk(
@@ -27,6 +28,7 @@ def _result(idx: int, score: float = 0.5) -> RetrievalResult:
 # ---------------------------------------------------------------------------
 # BaseReranker interface
 # ---------------------------------------------------------------------------
+
 
 class TestBaseRerankerInterface:
     def test_cannot_instantiate_directly(self):
@@ -44,6 +46,7 @@ class TestBaseRerankerInterface:
 # ---------------------------------------------------------------------------
 # CrossEncoderReranker (mocked model)
 # ---------------------------------------------------------------------------
+
 
 @pytest.fixture
 def mock_cross_encoder(monkeypatch):

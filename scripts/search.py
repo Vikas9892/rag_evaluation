@@ -1,4 +1,5 @@
 """Interactive CLI: embed a query, search the FAISS index, display ranked results."""
+
 import sys
 from pathlib import Path
 

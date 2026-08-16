@@ -94,19 +94,29 @@ class SourceScores(BaseModel):
     overlap, and that is a measurement; absence is not.
     """
 
-    dense: Optional[StageScore] = Field(default=None, description="Embedding similarity")
+    dense: Optional[StageScore] = Field(
+        default=None, description="Embedding similarity"
+    )
     sparse: Optional[StageScore] = Field(default=None, description="BM25 keyword match")
-    fused: Optional[StageScore] = Field(default=None, description="Reciprocal Rank Fusion")
-    reranker: Optional[StageScore] = Field(default=None, description="Cross-encoder rerank")
+    fused: Optional[StageScore] = Field(
+        default=None, description="Reciprocal Rank Fusion"
+    )
+    reranker: Optional[StageScore] = Field(
+        default=None, description="Cross-encoder rerank"
+    )
 
 
 class SourceInfo(BaseModel):
     document_id: str = Field(description="Source document identifier")
     chunk_id: str = Field(description="Unique chunk identifier within the document")
-    score: float = Field(description="Final score, in the units of the last stage to rank it")
+    score: float = Field(
+        description="Final score, in the units of the last stage to rank it"
+    )
     rank: int = Field(default=0, description="1-indexed final position")
     text: str = Field(default="", description="The retrieved chunk itself")
-    metadata: Dict = Field(default_factory=dict, description="Chunk metadata, e.g. heading")
+    metadata: Dict = Field(
+        default_factory=dict, description="Chunk metadata, e.g. heading"
+    )
     scores: SourceScores = Field(
         default_factory=SourceScores,
         description="How each retrieval stage scored this chunk",
@@ -158,27 +168,35 @@ class PipelineStageInfo(BaseModel):
     raises aborts the request, so no trace reaches the client.
     """
 
-    name: Literal["embedding", "dense", "sparse", "fusion", "reranker", "generation"] = (
-        Field(description="Stage identity, in data-flow order")
+    name: Literal[
+        "embedding", "dense", "sparse", "fusion", "reranker", "generation"
+    ] = Field(description="Stage identity, in data-flow order")
+    status: Literal["ok", "skipped", "error"] = Field(
+        description="Whether the stage ran"
     )
-    status: Literal["ok", "skipped", "error"] = Field(description="Whether the stage ran")
     latency_ms: float = Field(
         description="Measured duration; 0 for a skipped stage, which is an absence "
         "rather than a fast measurement"
     )
     candidates_in: Optional[int] = Field(
-        default=None, description="Candidates entering the stage; null where inapplicable"
+        default=None,
+        description="Candidates entering the stage; null where inapplicable",
     )
     candidates_out: Optional[int] = Field(
-        default=None, description="Candidates leaving the stage; null where inapplicable"
+        default=None,
+        description="Candidates leaving the stage; null where inapplicable",
     )
 
 
 class QueryResponse(BaseModel):
     model_config = ConfigDict(json_schema_extra={"example": _RESPONSE_EXAMPLE})
 
-    answer: str = Field(description="LLM-generated answer grounded in retrieved context")
-    sources: List[SourceInfo] = Field(description="Retrieved chunks used to generate the answer")
+    answer: str = Field(
+        description="LLM-generated answer grounded in retrieved context"
+    )
+    sources: List[SourceInfo] = Field(
+        description="Retrieved chunks used to generate the answer"
+    )
     retrieval_latency_ms: float = Field(description="Time spent on FAISS search (ms)")
     generation_latency_ms: float = Field(description="Time spent on LLM call (ms)")
     total_latency_ms: float = Field(description="End-to-end latency (ms)")
@@ -227,7 +245,9 @@ class DeepHealthResponse(BaseModel):
     status: Literal["healthy", "degraded", "unhealthy"] = Field(
         description="Worst of the individual checks"
     )
-    checks: List[HealthCheck] = Field(description="Every dependency, including passing ones")
+    checks: List[HealthCheck] = Field(
+        description="Every dependency, including passing ones"
+    )
 
 
 class ConfigResponse(BaseModel):
@@ -268,9 +288,13 @@ class RetrievalMetrics(BaseModel):
         "than K: retrieving 5 for 1 relevant chunk caps this at 0.2"
     )
     recall_at_k: float = Field(description="Share of relevant chunks retrieved")
-    hit_rate: float = Field(description="Questions with at least one relevant chunk retrieved")
+    hit_rate: float = Field(
+        description="Questions with at least one relevant chunk retrieved"
+    )
     mrr: float = Field(description="Mean reciprocal rank of the first relevant chunk")
-    avg_latency_ms: float = Field(description="Mean retrieval latency across the dataset")
+    avg_latency_ms: float = Field(
+        description="Mean retrieval latency across the dataset"
+    )
     p50_latency_ms: float = Field(
         default=0.0, description="Median retrieval latency across the dataset"
     )
@@ -298,7 +322,9 @@ class EvaluationResponse(BaseModel):
     retriever: Literal["dense", "sparse", "hybrid"]
     reranker: bool = False
     dataset_size: int
-    cached: bool = Field(description="Whether this run was served from the in-process cache")
+    cached: bool = Field(
+        description="Whether this run was served from the in-process cache"
+    )
     metrics: RetrievalMetrics
     questions: List[PerQuestionResult]
 
@@ -342,15 +368,25 @@ class DocumentResponse(BaseModel):
     content_type: str
     size_bytes: int
     status: Literal[
-        "UPLOADING", "QUEUED", "PARSING", "CHUNKING", "EMBEDDING", "INDEXING", "READY", "FAILED"
+        "UPLOADING",
+        "QUEUED",
+        "PARSING",
+        "CHUNKING",
+        "EMBEDDING",
+        "INDEXING",
+        "READY",
+        "FAILED",
     ] = Field(description="The worker's actual stage, not an invented progress step")
     progress: float = Field(
         description="0 to 1 through the pipeline. A failed document reports 0, because a "
         "bar stopped part way reads as still working."
     )
-    chunk_count: int = Field(description="Chunks indexed; 0 until the document is READY")
+    chunk_count: int = Field(
+        description="Chunks indexed; 0 until the document is READY"
+    )
     error: Optional[str] = Field(
-        default=None, description="Why indexing failed, in terms the uploader can act on"
+        default=None,
+        description="Why indexing failed, in terms the uploader can act on",
     )
     created_at: str
     updated_at: str

@@ -1,8 +1,8 @@
 """Tests for HybridRetriever — RRF fusion of dense + sparse scores."""
+
 from typing import List
 from unittest.mock import MagicMock
 
-import pytest
 
 from chunking.chunk import Chunk
 from retrieval.bm25_store import BM25Store
@@ -10,10 +10,10 @@ from retrieval.hybrid_retriever import HybridRetriever, _RRF_K
 from retrieval.pipeline import PipelineStage
 from retrieval.ranking import RetrievalResult
 
-
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
 
 def _chunk(idx: int, text: str = "text") -> Chunk:
     return Chunk(
@@ -29,7 +29,9 @@ def _result(chunk: Chunk, score: float, rank: int) -> RetrievalResult:
     return RetrievalResult(chunk=chunk, score=score, rank=rank)
 
 
-def _make_hybrid(dense_results: List[RetrievalResult], bm25_results: List[RetrievalResult]) -> HybridRetriever:
+def _make_hybrid(
+    dense_results: List[RetrievalResult], bm25_results: List[RetrievalResult]
+) -> HybridRetriever:
     dense_mock = MagicMock()
     dense_mock.retrieve.return_value = dense_results
     # The hybrid retriever asks for stages as well as results now.
@@ -60,6 +62,7 @@ def _make_hybrid(dense_results: List[RetrievalResult], bm25_results: List[Retrie
 # RRF fusion correctness
 # ---------------------------------------------------------------------------
 
+
 class TestRRFFusion:
     def test_chunk_in_both_retrievers_scores_higher(self):
         c_shared = _chunk(0, "shared chunk")
@@ -89,7 +92,9 @@ class TestRRFFusion:
     def test_ranks_are_1_indexed(self):
         chunks = [_chunk(i) for i in range(3)]
         hybrid = _make_hybrid(
-            dense_results=[_result(c, 1.0 - i * 0.1, i + 1) for i, c in enumerate(chunks)],
+            dense_results=[
+                _result(c, 1.0 - i * 0.1, i + 1) for i, c in enumerate(chunks)
+            ],
             bm25_results=[],
         )
         results = hybrid.retrieve("q", top_k=3)
@@ -98,7 +103,9 @@ class TestRRFFusion:
     def test_top_k_limits_output(self):
         chunks = [_chunk(i) for i in range(10)]
         hybrid = _make_hybrid(
-            dense_results=[_result(c, 1.0 - i * 0.05, i + 1) for i, c in enumerate(chunks)],
+            dense_results=[
+                _result(c, 1.0 - i * 0.05, i + 1) for i, c in enumerate(chunks)
+            ],
             bm25_results=[],
         )
         assert len(hybrid.retrieve("q", top_k=3)) == 3
@@ -110,7 +117,9 @@ class TestRRFFusion:
     def test_scores_are_descending(self):
         chunks = [_chunk(i, f"text about topic {i}") for i in range(4)]
         hybrid = _make_hybrid(
-            dense_results=[_result(c, 0.9 - i * 0.1, i + 1) for i, c in enumerate(chunks)],
+            dense_results=[
+                _result(c, 0.9 - i * 0.1, i + 1) for i, c in enumerate(chunks)
+            ],
             bm25_results=[_result(chunks[2], 3.0, 1), _result(chunks[3], 2.0, 2)],
         )
         results = hybrid.retrieve("q", top_k=4)

@@ -16,6 +16,7 @@ Key metrics to watch:
   - Requests/sec      — limited by Groq rate limits on free tier
   - Failure rate      — should be 0 % under normal load
 """
+
 import random
 
 from locust import HttpUser, between, task

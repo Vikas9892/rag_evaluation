@@ -151,7 +151,8 @@ class DocumentRepository:
         values.append(document_id)
         with self._connect() as conn:
             conn.execute(
-                f"UPDATE documents SET {', '.join(fields)} WHERE document_id = ?", values
+                f"UPDATE documents SET {', '.join(fields)} WHERE document_id = ?",
+                values,
             )
 
     def delete(self, document_id: str) -> bool:

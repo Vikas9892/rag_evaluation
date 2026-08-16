@@ -46,7 +46,9 @@ class FakeDense:
                 chunk=c,
                 score=self.scores[i],
                 rank=i + 1,
-                trace=RetrievalTrace(dense=StageScore(score=self.scores[i], rank=i + 1)),
+                trace=RetrievalTrace(
+                    dense=StageScore(score=self.scores[i], rank=i + 1)
+                ),
             )
             for i, c in enumerate(self.chunks[:top_k])
         ]

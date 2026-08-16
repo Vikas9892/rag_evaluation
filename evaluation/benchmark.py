@@ -7,8 +7,16 @@ from config.logging_config import get_logger
 from config.settings import TOP_K
 
 from .dataset import BenchmarkSample
-from .generation_evaluator import GenerationAggregateResult, GenerationEvaluator, GenerationSampleResult
-from .retrieval_evaluator import RetrievalAggregateResult, RetrievalEvaluator, RetrievalSampleResult
+from .generation_evaluator import (
+    GenerationAggregateResult,
+    GenerationEvaluator,
+    GenerationSampleResult,
+)
+from .retrieval_evaluator import (
+    RetrievalAggregateResult,
+    RetrievalEvaluator,
+    RetrievalSampleResult,
+)
 
 logger = get_logger(__name__)
 
@@ -32,7 +40,9 @@ class BenchmarkResult:
             "hit_rate": round(self.retrieval.hit_rate, 4),
             "mrr": round(self.retrieval.mrr, 4),
             "avg_retrieval_ms": round(self.retrieval.avg_latency_ms, 1),
-            "avg_semantic_similarity": round(self.generation.avg_semantic_similarity, 4),
+            "avg_semantic_similarity": round(
+                self.generation.avg_semantic_similarity, 4
+            ),
             "faithfulness_rate": (
                 round(self.generation.faithfulness_rate, 4)
                 if self.generation.faithfulness_rate is not None

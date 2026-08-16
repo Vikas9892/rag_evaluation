@@ -7,6 +7,7 @@ from config.settings import CHUNK_OVERLAP, CHUNK_SIZE, MIN_CHUNK_CHARS, SEPARATO
 from ingestion.document import Document
 
 from .chunk import Chunk
+from .config import ChunkingConfig
 
 logger = get_logger(__name__)
 
@@ -26,7 +27,7 @@ class DocumentSplitter:
     """
 
     @classmethod
-    def from_config(cls, config: "ChunkingConfig") -> "DocumentSplitter":
+    def from_config(cls, config: ChunkingConfig) -> "DocumentSplitter":
         """Build from a validated configuration.
 
         The individual keyword arguments stay for existing callers; this is the
@@ -110,7 +111,10 @@ class DocumentSplitter:
         if total != len(raw_chunks):
             logger.info(
                 "'%s' -> %d chunk(s) (%d merged as shorter than %d chars)",
-                document.id, total, len(raw_chunks) - total, self.min_chunk_chars,
+                document.id,
+                total,
+                len(raw_chunks) - total,
+                self.min_chunk_chars,
             )
         else:
             logger.info("'%s' -> %d chunk(s)", document.id, total)

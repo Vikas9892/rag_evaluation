@@ -160,7 +160,9 @@ class TestIndexingPipeline:
         doc = upload(repo, tmp_path, corpus, SAMPLE)
         indexer = DocumentIndexer(repo, embedder=FakeEmbedder())
 
-        indexer.handle(IndexingJob(job_id="j", document_id=doc.document_id, corpus_id=corpus))
+        indexer.handle(
+            IndexingJob(job_id="j", document_id=doc.document_id, corpus_id=corpus)
+        )
 
         stored = repo.get(doc.document_id)
         assert stored.status is DocumentStatus.READY
@@ -215,7 +217,9 @@ class TestIndexingPipeline:
         assert layout.exists
         assert not layout.is_default
 
-    def test_chunks_carry_the_corpus_and_the_document_name(self, repo, tmp_path, corpus):
+    def test_chunks_carry_the_corpus_and_the_document_name(
+        self, repo, tmp_path, corpus
+    ):
         import json
 
         doc = upload(repo, tmp_path, corpus, SAMPLE, name="networking.md")
@@ -223,22 +227,34 @@ class TestIndexingPipeline:
             IndexingJob(job_id="j", document_id=doc.document_id, corpus_id=corpus)
         )
 
-        records = json.loads(corpus_layout(corpus).metadata_path.read_text(encoding="utf-8"))
+        records = json.loads(
+            corpus_layout(corpus).metadata_path.read_text(encoding="utf-8")
+        )
         assert {r["corpus_id"] for r in records} == {corpus}
         # A citation shows the filename, not an opaque id.
         assert {r["document_id"] for r in records} == {"networking.md"}
 
-    def test_a_second_document_appends_rather_than_replacing(self, repo, tmp_path, corpus):
+    def test_a_second_document_appends_rather_than_replacing(
+        self, repo, tmp_path, corpus
+    ):
         import json
 
         indexer = DocumentIndexer(repo, embedder=FakeEmbedder())
         first = upload(repo, tmp_path, corpus, SAMPLE, name="one.md")
-        indexer.handle(IndexingJob(job_id="1", document_id=first.document_id, corpus_id=corpus))
-        after_first = len(json.loads(corpus_layout(corpus).metadata_path.read_text("utf-8")))
+        indexer.handle(
+            IndexingJob(job_id="1", document_id=first.document_id, corpus_id=corpus)
+        )
+        after_first = len(
+            json.loads(corpus_layout(corpus).metadata_path.read_text("utf-8"))
+        )
 
         second = upload(repo, tmp_path, corpus, SAMPLE, name="two.md")
-        indexer.handle(IndexingJob(job_id="2", document_id=second.document_id, corpus_id=corpus))
-        after_second = len(json.loads(corpus_layout(corpus).metadata_path.read_text("utf-8")))
+        indexer.handle(
+            IndexingJob(job_id="2", document_id=second.document_id, corpus_id=corpus)
+        )
+        after_second = len(
+            json.loads(corpus_layout(corpus).metadata_path.read_text("utf-8"))
+        )
 
         assert after_second > after_first
         records = json.loads(corpus_layout(corpus).metadata_path.read_text("utf-8"))
@@ -337,6 +353,8 @@ class TestChunkingSettings:
         indexer = DocumentIndexer(
             repo, embedder=FakeEmbedder(), splitter=DocumentSplitter(chunk_size=100)
         )
-        indexer.handle(IndexingJob(job_id="j", document_id=doc.document_id, corpus_id=corpus))
+        indexer.handle(
+            IndexingJob(job_id="j", document_id=doc.document_id, corpus_id=corpus)
+        )
 
         assert repo.get(doc.document_id).status is DocumentStatus.READY
