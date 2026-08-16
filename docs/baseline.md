@@ -95,13 +95,23 @@ and p95 alongside the mean, because a mean over 53 questions hides the tail.
 
 Reproduce: `GET /evaluation?top_k=5&retriever=dense`.
 
+Three further configurations were re-measured against
+[benchmark_report.md](benchmark_report.md), because a single point can match by
+luck where a spread cannot:
+
+| Configuration | Report | Re-measured |
+|---|---|---|
+| hybrid · top-5 | 0.848 MRR / 0.934 recall | 0.8475 / 0.934 |
+| sparse · top-5 | 0.715 MRR / 0.811 recall | 0.7154 / 0.811 |
+| sparse · top-5 · reranked | 0.888 MRR / 0.924 recall | 0.8884 / 0.924 |
+
 The suite grew rather than shrank — no test was deleted to make a change pass:
 
 | Check | Baseline | Now |
 |---|---|---|
-| Python tests | 453 | 644 |
-| Python coverage | 91% | above the 85% gate |
-| Frontend unit tests | 224 | 351 |
+| Python tests | 453 | 651 |
+| Python coverage | 91% | 93% (gate: 85%) |
+| Frontend unit tests | 224 | 359 |
 | Frontend E2E tests | — | 5, against a real API and index |
 
 One test was replaced rather than removed: `test_delete_is_not_allowed` asserted

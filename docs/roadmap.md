@@ -285,6 +285,52 @@ open decisions are closed:
 
 See [benchmark_report.md](benchmark_report.md) for the full matrix.
 
+---
+
+# Programme 2 — workspace and evaluation lab
+
+The milestones above built a dashboard over a corpus fixed at build time. This
+programme added the other half: a user uploads their own documents and queries
+them, over the *same* retriever the lab benchmarks. Its baseline is captured in
+[baseline.md](baseline.md).
+
+| Phase | Subject | Status | Where it landed |
+|---|---|---|---|
+| 0 | Repository audit and baseline | ✅ | `730dec7`, `baseline.md` |
+| 1 | Asynchronous document ingestion | ✅ | `3b64edb` queue/worker, `5f2fcc9` API |
+| 2 | Document management and lifecycle | ✅ | `e830503`, `6e42941` — real deletion, not a tombstone |
+| 3 | Corpus / index isolation | ✅ | `8f81de0` — `index/corpora/<id>/`, retrieval scoped per corpus |
+| 4 | Chunking as configuration | ✅ | `c500a3e` — indexing-time, and the UI says so |
+| 5 | Query-time retrieval settings | ✅ | `c500a3e`, `36a59bb` |
+| 6 | Query flow over an uploaded corpus | ✅ | `5f2fcc9`, `36a59bb` |
+| 7 | Source citation and retrieval trace | ✅ | `b850d77`, `1b549ac` (carried from M11/M12) |
+| 8 | Workspace UI | ✅ | `463080b`, `f869bfa` |
+| 9 | Query UI | ✅ | `36a59bb` |
+| 10 | Evaluation Lab | ✅ | `ac03aac`, `583b299` — the existing page kept, then extended |
+| 11 | Benchmark comparison and recommendation | ✅ | `34f796f` — with the latency it costs, not a winner |
+| 12 | Light / dark / system themes | ✅ | `1c9c3b0` |
+| 13 | Design system | ✅ | `components/ui/` — 15 primitives, one styling system |
+| 14 | Overview dashboard | ✅ | `24342d0` |
+| 15 | Settings, split by when a setting applies | ✅ | `a1e3ede` |
+| 16 | About | ✅ | `a1e3ede` |
+| 17 | Pydantic schemas, 202 on upload | ✅ | `5f2fcc9`, `api/schemas.py` |
+| 18 | Error handling | ✅ | `5f2fcc9`, `6710cef` — 422 bodies now name the field |
+| 19 | Testing, unit through E2E | ✅ | `dca40b9` — 651 Python, 359 frontend, 5 E2E |
+| 20 | Upload security | ✅ | `e830503` — type, size, and a filename never trusted as a path |
+| 21 | Performance | ✅ | `6710cef`, `f869bfa` — one shared model, stage timings surfaced |
+| 22 | Evaluation preserved | ✅ | verified in `baseline.md`; four configurations re-measured |
+| 23 | Documentation | ✅ | `4974732`, this file |
+
+**Phase 21 is the one worth reading twice.** Every retriever and the indexing
+worker constructed its own `Embedder`, so a process serving eight corpora held
+eight identical copies of bge-small — about a gigabyte of resident memory doing
+what 130 MB does. `shared_embedder()` is cached by model and device, so a caller
+that genuinely wants a different model still gets one.
+
+**Phase 22 held.** Precision@5, Recall@5, hit rate and MRR are identical to the
+pre-change baseline, and three further configurations reproduce the benchmark
+report to the digit. Retrieval quality was not traded for any of the above.
+
 ## What is left
 
 - **Deploy the frontend.** `frontend/vercel.json` and
