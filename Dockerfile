@@ -25,6 +25,17 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
     HF_HOME=/app/.cache/huggingface \
     PORT=8000
 
+# Hugging Face Spaces runs the container as uid 1000, and container hosts
+# generally drop root. The user is created before anything is copied so each
+# layer can be owned as it lands: a recursive chown afterwards duplicates every
+# file it touches into a new layer, which on an image carrying torch and a set
+# of model weights is an expensive way to change one metadata field.
+# /app is chowned as a single directory, not recursively: the app writes
+# index/, logs/ and the model cache into it at build and at runtime.
+RUN useradd --create-home --uid 1000 app && \
+    mkdir -p /app && \
+    chown app:app /app
+
 WORKDIR /app
 
 # Copy installed packages from builder
@@ -35,24 +46,24 @@ COPY --from=builder /install /usr/local
 # The five after `services` were missing until 2026-08 — the image had not been
 # rebuilt since the workspace programme added them, so it would have started
 # with ModuleNotFoundError on the first import.
-COPY config/       config/
-COPY chunking/     chunking/
-COPY embeddings/   embeddings/
-COPY generation/   generation/
-COPY retrieval/    retrieval/
-COPY services/     services/
-COPY corpora/      corpora/
-COPY documents/    documents/
-COPY ingestion/    ingestion/
-COPY jobs/         jobs/
-COPY evaluation/   evaluation/
-COPY api/          api/
-COPY aws/          aws/
+COPY --chown=app:app config/       config/
+COPY --chown=app:app chunking/     chunking/
+COPY --chown=app:app embeddings/   embeddings/
+COPY --chown=app:app generation/   generation/
+COPY --chown=app:app retrieval/    retrieval/
+COPY --chown=app:app services/     services/
+COPY --chown=app:app corpora/      corpora/
+COPY --chown=app:app documents/    documents/
+COPY --chown=app:app ingestion/    ingestion/
+COPY --chown=app:app jobs/         jobs/
+COPY --chown=app:app evaluation/   evaluation/
+COPY --chown=app:app api/          api/
+COPY --chown=app:app aws/          aws/
 
 # Needed only to build the benchmark index below, but they are small and
 # keeping them makes the corpus rebuildable inside a running container.
-COPY data/         data/
-COPY scripts/      scripts/
+COPY --chown=app:app data/         data/
+COPY --chown=app:app scripts/      scripts/
 
 # Bake the benchmark corpus and the model weights into the image.
 #
@@ -63,17 +74,10 @@ COPY scripts/      scripts/
 #
 # This is also what makes the Evaluation Lab work on a host with an ephemeral
 # filesystem: the labelled corpus is part of the image, not part of the volume.
+USER app
 RUN mkdir -p index logs && \
     python scripts/build_embeddings.py && \
     python scripts/build_index.py
-
-# Hugging Face Spaces runs the container as uid 1000 and Fargate-style hosts
-# often drop root too. Everything the app writes at runtime — uploads, the
-# document database, rebuilt indexes, logs, the model cache — lives under /app,
-# so the whole tree is handed to that user.
-RUN useradd --uid 1000 --create-home --shell /bin/bash app && \
-    chown -R app:app /app
-USER app
 
 EXPOSE 8000
 
