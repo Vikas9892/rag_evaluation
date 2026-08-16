@@ -396,6 +396,22 @@ every unit test passed.
 It is deliberately not part of `verify`: it needs two servers and a browser, and
 a check that cannot be run casually is one that stops being run.
 
+### What CI runs
+
+Three jobs, on every push and pull request:
+
+| Job | Covers |
+|---|---|
+| **Lint and format** | `ruff check .`, `black --check .` — no index build, so it reports in seconds |
+| **Frontend** | `npm ci`, typecheck, lint, format check, 359 unit tests, production build |
+| **Python 3.11 / 3.12** | Builds the index from source, then the suite with an 85% coverage gate |
+
+Playwright is the one gate CI does not hold, for the reason above.
+
+Line endings are normalised to LF by `.gitattributes`. Without it, Git for
+Windows checks everything out as CRLF and `prettier --check` fails on 108 files
+in a clone nobody has touched.
+
 ---
 
 ## Deployment

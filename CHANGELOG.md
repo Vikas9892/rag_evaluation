@@ -43,6 +43,12 @@ the same retriever the Evaluation Lab benchmarks.
   against a real API and index.
 - **Lint gate** — ruff and black configured in `pyproject.toml` and enforced by
   their own CI job, with pinned versions.
+- **Frontend CI job** — `npm ci`, typecheck, lint, format check, the 359 unit
+  tests and the production build now run on every push, instead of depending on
+  somebody remembering `npm run verify`.
+- **`.gitattributes`** — line endings normalised to LF. Git for Windows checks
+  out CRLF by default, which failed `prettier --check` on 108 files in an
+  untouched clone and made an editor's save look like a 1,200-line diff.
 
 ### Fixed
 

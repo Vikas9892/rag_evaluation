@@ -377,12 +377,11 @@ went 67% → 90%; the suite went 651 → 666 tests and 93% → 94%.
   generation evaluator exists and costs LLM calls, so it has no endpoint yet.
 - **A demo GIF.** Screenshots are captured headlessly into `docs/screenshots/`;
   a recorded walkthrough is not.
-- **CI does not run the frontend.** `npm test`, `typecheck`, `lint`,
-  `format:check` and `build` are local-only, via `npm run verify`. Given that
-  three backend failures survived for weeks precisely because they only ran
-  where they could not fail, a frontend job is the obvious next gate — 359 unit
-  tests currently depend on somebody remembering. `format:check` had in fact
-  been failing on a committed file for days before anyone ran it.
+- **The end-to-end suite is not in CI.** The frontend job (`655a02e`) runs the
+  typecheck, lint, format check, 359 unit tests and the build; Playwright stays
+  local because it needs the model weights and both servers running to re-cover
+  ground the unit suite already holds. It remains the only check that depends on
+  somebody remembering.
 
 ---
 
