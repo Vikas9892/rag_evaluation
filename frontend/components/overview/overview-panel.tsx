@@ -3,6 +3,7 @@
 import Link from "next/link";
 
 import { ErrorState } from "@/components/error-state";
+import { Modes } from "@/components/overview/modes";
 import { MetricTile, ms } from "@/components/metric-tile";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -27,6 +28,13 @@ export function OverviewPanel() {
 
   return (
     <div className="space-y-6">
+      {/*
+        First, because it is the only thing on this page that answers "what is
+        this and what do I do with it". The health checks below matter to
+        whoever runs the deployment; they are not the product.
+      */}
+      <Modes />
+
       <Card>
         <CardHeader>
           <CardTitle>Dependencies</CardTitle>
@@ -103,7 +111,9 @@ export function OverviewPanel() {
       </Card>
 
       <nav aria-label="Sections" className="grid gap-3 sm:grid-cols-2">
-        {ROUTES.filter((r) => r.href !== "/" && r.href !== "/about").map((route) => {
+        {ROUTES.filter(
+          (r) => !["/", "/about", "/workspace", "/evaluation"].includes(r.href),
+        ).map((route) => {
           const Icon = route.icon;
           return (
             <Link

@@ -27,7 +27,7 @@ export const ROUTES: readonly AppRoute[] = [
   {
     href: "/",
     label: "Overview",
-    description: "System health, corpus size and the last benchmark run.",
+    description: "What this platform does, what is indexed, and whether it is working.",
     icon: LayoutDashboard,
   },
   {
