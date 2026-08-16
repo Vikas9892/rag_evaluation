@@ -175,7 +175,9 @@ async def upload_document(
         corpus_id=corpus_id,
         status=DocumentStatus.QUEUED.value,
         filename=filename,
-        duplicate_of=existing.document_id if existing else None,
+        # Always None here: the duplicate case returned above. The conditional
+        # this replaces read as though both outcomes were live.
+        duplicate_of=None,
     )
 
 
