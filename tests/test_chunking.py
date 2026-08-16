@@ -1,8 +1,7 @@
 """Unit tests for Phase 2 — chunking pipeline."""
+
 import sys
 from pathlib import Path
-
-import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
@@ -10,13 +9,18 @@ from ingestion.document import Document
 from chunking.chunk import Chunk
 from chunking.splitter import DocumentSplitter
 
-
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
 
+
 def make_doc(text: str, doc_id: str = "test.txt") -> Document:
-    return Document(id=doc_id, source=f"/raw/{doc_id}", text=text, metadata={"type": "txt", "source": doc_id})
+    return Document(
+        id=doc_id,
+        source=f"/raw/{doc_id}",
+        text=text,
+        metadata={"type": "txt", "source": doc_id},
+    )
 
 
 def small_splitter(**kwargs) -> DocumentSplitter:
@@ -29,6 +33,7 @@ def small_splitter(**kwargs) -> DocumentSplitter:
 # ---------------------------------------------------------------------------
 # Chunk dataclass
 # ---------------------------------------------------------------------------
+
 
 class TestChunk:
     def test_fields_are_set(self):
@@ -60,6 +65,7 @@ class TestChunk:
 # Empty document
 # ---------------------------------------------------------------------------
 
+
 class TestEmptyDocument:
     def test_empty_text_produces_no_chunks(self):
         doc = make_doc("")
@@ -75,6 +81,7 @@ class TestEmptyDocument:
 # ---------------------------------------------------------------------------
 # Small document (fits in one chunk)
 # ---------------------------------------------------------------------------
+
 
 class TestSmallDocument:
     def test_short_text_yields_one_chunk(self):
@@ -99,6 +106,7 @@ class TestSmallDocument:
 # ---------------------------------------------------------------------------
 # Large document (multiple chunks)
 # ---------------------------------------------------------------------------
+
 
 class TestLargeDocument:
     def _long_text(self, sentences: int = 30) -> str:
@@ -152,6 +160,7 @@ class TestLargeDocument:
 # Chunk IDs and document linkage
 # ---------------------------------------------------------------------------
 
+
 class TestChunkIdentifiers:
     def test_chunk_ids_are_unique(self):
         doc = make_doc("word " * 200)
@@ -183,6 +192,7 @@ class TestChunkIdentifiers:
 # Character offsets
 # ---------------------------------------------------------------------------
 
+
 class TestCharOffsets:
     def test_offsets_within_document_bounds(self):
         text = "word " * 200
@@ -204,12 +214,13 @@ class TestCharOffsets:
         doc = make_doc(text)
         chunks = small_splitter().split(doc)
         for chunk in chunks:
-            assert doc.text[chunk.start_char: chunk.end_char] == chunk.text
+            assert doc.text[chunk.start_char : chunk.end_char] == chunk.text
 
 
 # ---------------------------------------------------------------------------
 # Overlap
 # ---------------------------------------------------------------------------
+
 
 class TestOverlap:
     def test_consecutive_chunks_overlap(self):
@@ -227,7 +238,7 @@ class TestOverlap:
         chunks = splitter.split(doc)
         assert len(chunks) >= 2
         # The overlap region from chunk[0] must be present somewhere in chunk[1]
-        overlap_text = doc.text[chunks[1].start_char: chunks[0].end_char]
+        overlap_text = doc.text[chunks[1].start_char : chunks[0].end_char]
         assert overlap_text in chunks[1].text
 
     def test_zero_overlap_chunks_do_not_overlap(self):
@@ -243,6 +254,7 @@ class TestOverlap:
 # ---------------------------------------------------------------------------
 # Metadata
 # ---------------------------------------------------------------------------
+
 
 class TestMetadata:
     def _chunks(self) -> list:
@@ -297,6 +309,7 @@ class TestMetadata:
 # split_many
 # ---------------------------------------------------------------------------
 
+
 class TestSplitMany:
     def test_split_many_aggregates_chunks(self):
         docs = [make_doc("word " * 100, doc_id=f"doc{i}.txt") for i in range(3)]
@@ -329,7 +342,8 @@ MARKDOWN = (
 
 def md_splitter(**kwargs) -> DocumentSplitter:
     defaults = dict(
-        chunk_size=250, chunk_overlap=50,
+        chunk_size=250,
+        chunk_overlap=50,
         separators=["\n## ", "\n### ", "\n\n", "\n", ". ", " ", ""],
     )
     defaults.update(kwargs)
@@ -356,7 +370,7 @@ class TestShortChunkMerging:
     def test_offsets_still_match_the_source_slice(self):
         doc = make_doc(MARKDOWN, "dbms.md")
         for chunk in md_splitter().split(doc):
-            assert doc.text[chunk.start_char:chunk.end_char] == chunk.text
+            assert doc.text[chunk.start_char : chunk.end_char] == chunk.text
 
     def test_chunk_indices_are_contiguous_after_merging(self):
         chunks = md_splitter().split(make_doc(MARKDOWN, "dbms.md"))
@@ -386,92 +400,12 @@ class TestShortChunkMerging:
 
     def test_threshold_is_clamped_below_half_chunk_size(self):
         """A threshold >= chunk_size would cascade the document into one blob."""
-        assert DocumentSplitter(chunk_size=50, min_chunk_chars=999).min_chunk_chars == 25
-        assert DocumentSplitter(chunk_size=250, min_chunk_chars=50).min_chunk_chars == 50
-
-    def test_negative_threshold_is_treated_as_disabled(self):
-        assert DocumentSplitter(min_chunk_chars=-10).min_chunk_chars == 0
-
-
-# ---------------------------------------------------------------------------
-# Short-chunk merging
-# ---------------------------------------------------------------------------
-
-# The ACID section deliberately exceeds chunk_size, so the recursive splitter
-# falls through to "\n\n" and isolates the heading — the exact shape that
-# produced a heading-only chunk in the real corpus.
-MARKDOWN = (
-    "## ACID Properties\n\n"
-    "| Atomicity | All or nothing, the transaction commits fully or rolls back |\n"
-    "| Consistency | The database moves from one valid state to another valid one |\n"
-    "| Isolation | Concurrent transactions do not interfere with one another |\n"
-    "| Durability | Committed data survives crashes and restarts of the server |\n\n"
-    "## Indexing\n\n"
-    "A B-Tree index allows O(log n) lookups and is used by most RDBMS engines.\n"
-)
-
-
-def md_splitter(**kwargs) -> DocumentSplitter:
-    defaults = dict(
-        chunk_size=250, chunk_overlap=50,
-        separators=["\n## ", "\n### ", "\n\n", "\n", ". ", " ", ""],
-    )
-    defaults.update(kwargs)
-    return DocumentSplitter(**defaults)
-
-
-class TestShortChunkMerging:
-    def test_heading_only_chunk_is_not_indexed_alone(self):
-        chunks = md_splitter().split(make_doc(MARKDOWN, "dbms.md"))
-        assert not any(c.text.strip() == "## ACID Properties" for c in chunks)
-
-    def test_heading_is_retained_as_a_prefix(self):
-        """Merging forward keeps the heading as signal instead of dropping it."""
-        chunks = md_splitter().split(make_doc(MARKDOWN, "dbms.md"))
-        owner = [c for c in chunks if "Atomicity" in c.text]
-        assert owner and "ACID Properties" in owner[0].text
-
-    def test_no_content_is_lost(self):
-        chunks = md_splitter().split(make_doc(MARKDOWN, "dbms.md"))
-        joined = " ".join(c.text for c in chunks)
-        for fragment in ("ACID Properties", "Atomicity", "Durability", "B-Tree"):
-            assert fragment in joined
-
-    def test_offsets_still_match_the_source_slice(self):
-        doc = make_doc(MARKDOWN, "dbms.md")
-        for chunk in md_splitter().split(doc):
-            assert doc.text[chunk.start_char:chunk.end_char] == chunk.text
-
-    def test_chunk_indices_are_contiguous_after_merging(self):
-        chunks = md_splitter().split(make_doc(MARKDOWN, "dbms.md"))
-        assert [c.metadata["chunk_index"] for c in chunks] == list(range(len(chunks)))
-        assert all(c.metadata["chunk_count"] == len(chunks) for c in chunks)
-
-    def test_every_chunk_meets_the_threshold(self):
-        splitter = md_splitter()
-        for chunk in splitter.split(make_doc(MARKDOWN, "dbms.md")):
-            assert len(chunk.text.strip()) >= splitter.min_chunk_chars
-
-    def test_disabling_the_filter_restores_heading_only_chunks(self):
-        chunks = md_splitter(min_chunk_chars=0).split(make_doc(MARKDOWN, "dbms.md"))
-        assert any(c.text.strip() == "## ACID Properties" for c in chunks)
-
-    def test_document_shorter_than_threshold_survives(self):
-        """Content is never dropped, even when nothing can absorb it."""
-        chunks = md_splitter().split(make_doc("# Tiny", "tiny.md"))
-        assert len(chunks) == 1
-        assert chunks[0].text.strip() == "# Tiny"
-
-    def test_trailing_short_chunk_merges_backward(self):
-        text = "A" * 240 + "\n\n## End"
-        chunks = md_splitter().split(make_doc(text, "t.md"))
-        assert not any(c.text.strip() == "## End" for c in chunks)
-        assert "## End" in chunks[-1].text
-
-    def test_threshold_is_clamped_below_half_chunk_size(self):
-        """A threshold >= chunk_size would cascade the document into one blob."""
-        assert DocumentSplitter(chunk_size=50, min_chunk_chars=999).min_chunk_chars == 25
-        assert DocumentSplitter(chunk_size=250, min_chunk_chars=50).min_chunk_chars == 50
+        assert (
+            DocumentSplitter(chunk_size=50, min_chunk_chars=999).min_chunk_chars == 25
+        )
+        assert (
+            DocumentSplitter(chunk_size=250, min_chunk_chars=50).min_chunk_chars == 50
+        )
 
     def test_negative_threshold_is_treated_as_disabled(self):
         assert DocumentSplitter(min_chunk_chars=-10).min_chunk_chars == 0
