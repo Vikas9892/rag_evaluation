@@ -45,11 +45,17 @@ export function SettingsPanel() {
         <Row label="Default top-K" value={String(data.default_top_k)} />
         <Row
           label="Cross-encoder reranker"
-          value={data.reranker_enabled ? "enabled" : "implemented, not in the live path"}
-          note={
+          value={
             data.reranker_enabled
-              ? undefined
-              : "The pipeline trace reports it skipped rather than pretending it ran."
+              ? "on by default"
+              : data.reranker_available
+                ? "available, off by default"
+                : "not available"
+          }
+          note={
+            data.reranker_available && !data.reranker_enabled
+              ? "Opt in per query on the query page. It lifts MRR but adds hundreds of milliseconds against a generation step of 300-600 ms, so it is a trade to make deliberately. When it does not run, the pipeline trace reports it skipped rather than pretending it ran."
+              : undefined
           }
         />
       </Section>

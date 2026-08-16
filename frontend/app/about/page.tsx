@@ -1,4 +1,5 @@
 import { PageHeader } from "@/components/layout/page-header";
+import { MeasuredQuality } from "@/components/about/measured-quality";
 import { metadataFor, routeMeta } from "@/lib/page-meta";
 
 export const metadata = metadataFor("/about");
@@ -8,15 +9,11 @@ const STAGES = [
   { name: "Dense", detail: "FAISS IndexFlatIP, exact inner-product search" },
   { name: "Sparse", detail: "BM25 over the same chunks" },
   { name: "Fusion", detail: "Reciprocal Rank Fusion, k = 60" },
-  { name: "Reranker", detail: "Cross-encoder — implemented, not yet in the live path" },
+  {
+    name: "Reranker",
+    detail: "Cross-encoder ms-marco-MiniLM-L-6-v2 — opt-in per query, off by default",
+  },
   { name: "Generation", detail: "Groq llama-3.1-8b-instant, temperature 0" },
-];
-
-const METRICS = [
-  { label: "Recall@5", value: "1.00" },
-  { label: "MRR", value: "1.00" },
-  { label: "Precision@5", value: "0.23" },
-  { label: "Retrieval p50", value: "36 ms" },
 ];
 
 export default function AboutPage() {
@@ -54,21 +51,13 @@ export default function AboutPage() {
 
         <section>
           <h2 className="mb-3 text-base font-semibold">Measured quality</h2>
-          <dl className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-            {METRICS.map((m) => (
-              <div key={m.label} className="border-border rounded-lg border p-3">
-                <dt className="text-muted-foreground text-xs">{m.label}</dt>
-                <dd className="mt-1 text-lg font-semibold tabular-nums">{m.value}</dd>
-              </div>
-            ))}
-          </dl>
-          <p className="text-muted-foreground mt-3">
-            Measured over a 15-question labelled dataset against a 19-chunk corpus with
-            hybrid retrieval at top-5. Precision@5 is structurally capped near
-            0.20&ndash;0.40 here, because each question has one or two relevant chunks and
-            five are retrieved &mdash; read Recall and MRR instead. MRR of 1.00 over a
-            corpus this small measures the corpus as much as the retriever.
-          </p>
+          {/*
+            Read from the API, never typed here. The section below argues that a
+            fabricated metric is exactly what this product exists to prevent,
+            and a hardcoded list on this page had already drifted to claiming
+            Recall 1.00 over a dataset that had since more than tripled.
+          */}
+          <MeasuredQuality />
         </section>
 
         <section>
