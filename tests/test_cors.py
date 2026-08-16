@@ -104,10 +104,36 @@ class TestPreflight:
         r = self._preflight(client, ALLOWED)
         assert "POST" in r.headers["access-control-allow-methods"]
 
-    def test_delete_is_not_allowed(self, client):
-        """Only the verbs the client actually issues are permitted."""
+    def test_delete_is_allowed(self, client):
+        """Removing a document is a cross-origin DELETE from the browser.
+
+        This asserted the opposite until document deletion shipped, at which
+        point it locked in a bug: the preflight failed on every delete and no
+        unit test noticed, because they all call the API in-process.
+        """
         r = self._preflight(client, ALLOWED, method="DELETE")
-        assert "DELETE" not in r.headers.get("access-control-allow-methods", "")
+        assert "DELETE" in r.headers["access-control-allow-methods"]
+
+    def test_every_method_the_app_serves_is_allowed(self, client):
+        """The allowlist is derived from the routes, not maintained by hand.
+
+        A verb added to a router and forgotten here works in every test and
+        fails only in a browser, which is the most expensive place to find it.
+        """
+        served = {
+            method
+            for route in client.app.routes
+            for method in getattr(route, "methods", set())
+            if method not in {"HEAD", "OPTIONS"}
+        }
+        allowed = {
+            m.strip()
+            for m in self._preflight(client, ALLOWED)
+            .headers["access-control-allow-methods"]
+            .split(",")
+        }
+
+        assert served <= allowed, f"not allowed through CORS: {sorted(served - allowed)}"
 
     def test_disallowed_origin_preflight_is_rejected(self, client):
         r = self._preflight(client, DENIED)

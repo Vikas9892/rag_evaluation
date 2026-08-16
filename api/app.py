@@ -96,8 +96,11 @@ def create_app() -> FastAPI:
         # Leaving it on would also forbid a wildcard origin outright.
         allow_credentials=False,
         # Only what the client actually issues — /query and /stream are POST,
-        # /health and /metrics are GET.
-        allow_methods=["GET", "POST", "OPTIONS"],
+        # /health and /metrics are GET, and a document is removed with DELETE.
+        # This list going stale is invisible in unit tests, which never make a
+        # cross-origin request: DELETE was missing here for as long as document
+        # deletion existed, and the browser failed the preflight every time.
+        allow_methods=["GET", "POST", "DELETE", "OPTIONS"],
         allow_headers=["Content-Type"],
     )
     logger.info("CORS allowlist: %s", ", ".join(origins))
