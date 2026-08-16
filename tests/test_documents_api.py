@@ -7,6 +7,7 @@ covered in tests/test_jobs.py.
 """
 
 import io
+from typing import Iterator
 import json
 
 import numpy as np
@@ -71,8 +72,9 @@ Slow start grows the window exponentially until loss is detected.
 
 
 @pytest.fixture
-def repo(tmp_path) -> DocumentRepository:
-    return DocumentRepository(tmp_path / "documents.db")
+def repo(tmp_path) -> Iterator[DocumentRepository]:
+    with DocumentRepository(tmp_path / "documents.db") as repository:
+        yield repository
 
 
 @pytest.fixture

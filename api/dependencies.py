@@ -176,7 +176,16 @@ def start_indexing_worker() -> None:
 
 
 def stop_indexing_worker() -> None:
+    # Order matters: the worker writes document status, so it has to be stopped
+    # before the connections it writes through are closed.
     get_indexing_queue().stop()
+
+    # cache_clear before close, so anything that asks for a repository after
+    # shutdown builds a fresh one rather than being handed a closed one. This
+    # is what a TestClient does between two `with` blocks in the same process.
+    repository = _build_document_repository()
+    _build_document_repository.cache_clear()
+    repository.close()
 
 
 def get_service() -> RAGService:

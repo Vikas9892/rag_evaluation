@@ -69,6 +69,13 @@ class DocumentRepository:
         self.db_path = Path(db_path)
         self.db_path.parent.mkdir(parents=True, exist_ok=True)
         self._local = threading.local()
+        # Every connection handed out, so close() can reach the ones belonging
+        # to threads that have already finished. A thread-local alone is only
+        # readable from its own thread, which is precisely the thread that no
+        # longer exists by the time anyone thinks to clean up.
+        self._connections: List[sqlite3.Connection] = []
+        self._connections_lock = threading.Lock()
+        self._closed = False
         with self._connect() as conn:
             conn.executescript(_SCHEMA)
             _add_missing_columns(conn)
@@ -77,14 +84,52 @@ class DocumentRepository:
     def _connect(self) -> Iterator[sqlite3.Connection]:
         conn = getattr(self._local, "conn", None)
         if conn is None:
-            conn = sqlite3.connect(self.db_path, timeout=10)
+            if self._closed:
+                raise RuntimeError("DocumentRepository is closed")
+            # check_same_thread=False relaxes sqlite3's guard *only* so that
+            # close() can run from a different thread than the one that opened
+            # the connection; sqlite3 counts closing as use and would otherwise
+            # refuse. It does not make the connection shared: _connect only
+            # ever hands a thread the connection stored in its own thread-local,
+            # so two threads still never touch the same one.
+            conn = sqlite3.connect(self.db_path, timeout=10, check_same_thread=False)
             conn.row_factory = sqlite3.Row
             # WAL lets the worker write while a request reads, instead of the
             # two blocking each other on every status poll.
             conn.execute("PRAGMA journal_mode=WAL")
             self._local.conn = conn
+            with self._connections_lock:
+                self._connections.append(conn)
         with conn:
             yield conn
+
+    # ------------------------------------------------------------------
+    # Lifecycle
+    # ------------------------------------------------------------------
+
+    def close(self) -> None:
+        """Close every connection this repository opened.
+
+        Without it a connection stays open until the interpreter collects it,
+        which on CPython means a ResourceWarning and, on Windows, a database
+        file that cannot be deleted while a test's temporary directory is being
+        torn down.
+
+        Idempotent, so a caller that closes on both an error path and a normal
+        one does not have to keep track.
+        """
+        with self._connections_lock:
+            connections, self._connections = self._connections, []
+            self._closed = True
+        for conn in connections:
+            conn.close()
+        self._local = threading.local()
+
+    def __enter__(self) -> "DocumentRepository":
+        return self
+
+    def __exit__(self, *exc_info: object) -> None:
+        self.close()
 
     # ------------------------------------------------------------------
     # Write

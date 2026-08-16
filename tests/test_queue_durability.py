@@ -8,6 +8,7 @@ that can actually be wrong here.
 """
 
 import sys
+from typing import Iterator
 import threading
 import types
 
@@ -143,8 +144,9 @@ class TestRestartRecovery:
     """The in-process queue is not durable, so startup repairs what it lost."""
 
     @pytest.fixture
-    def repo(self, tmp_path) -> DocumentRepository:
-        return DocumentRepository(tmp_path / "documents.db")
+    def repo(self, tmp_path) -> Iterator[DocumentRepository]:
+        with DocumentRepository(tmp_path / "documents.db") as repository:
+            yield repository
 
     def stranded(self, repo: DocumentRepository, status: DocumentStatus) -> Document:
         return repo.add(

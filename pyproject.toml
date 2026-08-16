@@ -18,6 +18,14 @@ ignore = ["E501"]
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 addopts = "-q --tb=short"
+filterwarnings = [
+    # An unclosed SQLite connection is a leak the suite should not tolerate:
+    # it survives until the interpreter collects it, and on Windows it holds
+    # the database file open against the tmp_path teardown that follows.
+    # Scoped to the message so an unrelated ResourceWarning from a dependency
+    # does not fail an unrelated test.
+    "error:unclosed database:ResourceWarning",
+]
 markers = [
     "slow: marks tests as slow (model downloads, real I/O)",
     "integration: marks tests that require a live FAISS index",

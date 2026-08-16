@@ -6,6 +6,7 @@ unusable, and the embedding maths is covered in tests/test_embeddings.py.
 """
 
 import threading
+from typing import Iterator
 import time
 
 import numpy as np
@@ -32,8 +33,9 @@ class FakeEmbedder:
 
 
 @pytest.fixture
-def repo(tmp_path) -> DocumentRepository:
-    return DocumentRepository(tmp_path / "documents.db")
+def repo(tmp_path) -> Iterator[DocumentRepository]:
+    with DocumentRepository(tmp_path / "documents.db") as repository:
+        yield repository
 
 
 @pytest.fixture
@@ -202,8 +204,8 @@ class TestIndexingPipeline:
             IndexingJob(job_id="j", document_id=doc.document_id, corpus_id=corpus)
         )
 
-        reopened = DocumentRepository(repo.db_path)
-        timings = reopened.get(doc.document_id).timings_ms
+        with DocumentRepository(repo.db_path) as reopened:
+            timings = reopened.get(doc.document_id).timings_ms
         assert isinstance(timings["parse"], float)
 
     def test_writes_into_the_named_corpus_only(self, repo, tmp_path, corpus):

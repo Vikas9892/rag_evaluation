@@ -5,6 +5,7 @@ browser, is attacker-controlled, and is the input to a filesystem write.
 """
 
 import pytest
+from typing import Iterator
 
 from documents import (
     MAX_UPLOAD_BYTES,
@@ -26,8 +27,9 @@ from documents.models import STAGE_ORDER
 
 
 @pytest.fixture
-def repo(tmp_path) -> DocumentRepository:
-    return DocumentRepository(tmp_path / "documents.db")
+def repo(tmp_path) -> Iterator[DocumentRepository]:
+    with DocumentRepository(tmp_path / "documents.db") as repository:
+        yield repository
 
 
 def make_doc(**overrides) -> Document:
