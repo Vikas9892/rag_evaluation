@@ -825,6 +825,12 @@ export interface components {
             workers: number;
             /** Note */
             note: string;
+            /**
+             * Storage Ephemeral
+             * @description True where the filesystem does not survive a restart — a free Hugging Face Space, for instance. Uploaded documents and their chunks are lost when the container is replaced. Reported so the workspace can say so before someone uploads, rather than after.
+             * @default false
+             */
+            storage_ephemeral: boolean;
         };
         /** RetrievalMetrics */
         RetrievalMetrics: {

@@ -68,6 +68,7 @@ beforeEach(() => {
     durable: false,
     workers: 1,
     note: "inline",
+    storage_ephemeral: false,
   });
   getCorpora.mockReset().mockResolvedValue({ corpora: [] });
 });
@@ -171,6 +172,38 @@ describe("WorkspacePanel", () => {
 
       await screen.findByText("handbook.pdf");
       expect(screen.queryByText(/Indexed in/)).not.toBeInTheDocument();
+    });
+  });
+
+  describe("temporary storage", () => {
+    it("warns before an upload when the deployment cannot keep it", async () => {
+      // A free Hugging Face Space replaces the container and takes the disk
+      // with it. Saying so afterwards is not a warning, it is an apology.
+      getQueueStatus.mockResolvedValue({
+        backend: "in-process",
+        durable: false,
+        workers: 1,
+        note: "inline",
+        storage_ephemeral: true,
+      });
+      renderPanel();
+
+      expect(
+        await screen.findByText(/Uploads on this deployment are temporary/),
+      ).toBeInTheDocument();
+      // And the reassuring half: the benchmark corpus is in the image.
+      expect(screen.getByText(/part of the image and stays/)).toBeInTheDocument();
+    });
+
+    it("stays quiet where storage survives a restart", async () => {
+      // Warning every local developer about a problem they do not have would
+      // teach them to ignore the line that matters.
+      renderPanel();
+
+      await screen.findByText(/Drop documents here/);
+      expect(
+        screen.queryByText(/Uploads on this deployment are temporary/),
+      ).not.toBeInTheDocument();
     });
   });
 

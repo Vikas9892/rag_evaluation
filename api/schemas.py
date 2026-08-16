@@ -450,6 +450,15 @@ class QueueStatusResponse(BaseModel):
     )
     workers: int
     note: str
+    storage_ephemeral: bool = Field(
+        default=False,
+        description=(
+            "True where the filesystem does not survive a restart — a free "
+            "Hugging Face Space, for instance. Uploaded documents and their "
+            "chunks are lost when the container is replaced. Reported so the "
+            "workspace can say so before someone uploads, rather than after."
+        ),
+    )
 
 
 # ---------------------------------------------------------------------------

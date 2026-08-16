@@ -1,3 +1,21 @@
+---
+title: RAG Evaluation Platform
+emoji: 🔍
+colorFrom: green
+colorTo: gray
+sdk: docker
+app_port: 8000
+pinned: false
+---
+
+<!--
+  The block above is Hugging Face Spaces configuration; Spaces reads it from
+  this file and nowhere else. GitHub renders it as a small table at the top of
+  the page, which is the cost of the two hosts sharing one README.
+  `app_port` must match EXPOSE in the Dockerfile — Spaces otherwise waits on
+  7860 and the Space never reports healthy.
+-->
+
 # RAG Evaluation Platform
 
 A Retrieval-Augmented Generation pipeline built from first principles in Python — no

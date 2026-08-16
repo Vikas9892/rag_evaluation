@@ -360,3 +360,23 @@ class TestQueueStatus:
         body = client.get("/queue").json()
         assert body["backend"] in {"in-process", "redis"}
         assert "durable" in body
+
+    def test_storage_is_assumed_durable_unless_the_deployment_says_otherwise(
+        self, client, monkeypatch
+    ):
+        # A container cannot detect whether the volume under it outlives it, so
+        # the deployment declares it. Defaulting to "ephemeral" would warn every
+        # local developer about a problem they do not have.
+        monkeypatch.delenv("STORAGE_EPHEMERAL", raising=False)
+        assert client.get("/queue").json()["storage_ephemeral"] is False
+
+    @pytest.mark.parametrize("value", ["1", "true", "TRUE", "yes"])
+    def test_an_ephemeral_deployment_is_reported(self, client, monkeypatch, value):
+        # The workspace warns before someone uploads, rather than after the
+        # document goes missing.
+        monkeypatch.setenv("STORAGE_EPHEMERAL", value)
+        assert client.get("/queue").json()["storage_ephemeral"] is True
+
+    def test_an_unrecognised_value_is_not_read_as_true(self, client, monkeypatch):
+        monkeypatch.setenv("STORAGE_EPHEMERAL", "no")
+        assert client.get("/queue").json()["storage_ephemeral"] is False

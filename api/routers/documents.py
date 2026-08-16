@@ -9,6 +9,7 @@ happen on the worker in `jobs/indexer.py`.
 """
 
 import hashlib
+import os
 from typing import Optional
 
 from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile
@@ -353,4 +354,11 @@ async def list_corpora(
 async def queue_status(
     queue: JobQueue = Depends(get_indexing_queue),
 ) -> QueueStatusResponse:
-    return QueueStatusResponse(**queue.describe())
+    # Declared by the deployment rather than detected: a container cannot tell
+    # whether the volume under it is backed by anything that outlives it.
+    ephemeral = os.environ.get("STORAGE_EPHEMERAL", "").strip().lower() in {
+        "1",
+        "true",
+        "yes",
+    }
+    return QueueStatusResponse(**queue.describe(), storage_ephemeral=ephemeral)

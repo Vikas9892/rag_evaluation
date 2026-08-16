@@ -99,6 +99,26 @@ export function WorkspacePanel() {
             ) : null}
           </div>
 
+          {/*
+            Said before an upload, not after one goes missing. On a host with an
+            ephemeral filesystem — a free Hugging Face Space, say — the container
+            is replaced and everything written to it goes with it. The benchmark
+            corpus is unaffected: it is baked into the image.
+          */}
+          {queue.data?.storage_ephemeral ? (
+            <p
+              role="status"
+              className="border-border text-muted-foreground border-t pt-3 text-xs"
+            >
+              <strong className="text-foreground">
+                Uploads on this deployment are temporary.
+              </strong>{" "}
+              Its storage does not survive a restart, so documents you add here are lost
+              when the server is replaced. The benchmark corpus behind Evaluation and
+              Benchmarks is part of the image and stays.
+            </p>
+          ) : null}
+
           {queue.data && !queue.data.durable ? (
             <p className="text-muted-foreground border-border border-t pt-3 text-xs">
               Indexing runs on an in-process worker. Jobs are recovered if the API
