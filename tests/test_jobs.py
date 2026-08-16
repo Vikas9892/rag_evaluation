@@ -275,6 +275,104 @@ class TestIndexingPipeline:
         assert embedder.calls == 2  # one per document, not one per chunk
 
 
+class TestDeletedWhileIndexing:
+    """A delete that lands while the job is in flight.
+
+    DELETE removes whatever chunks are in the index at that moment; the worker
+    writes its chunks afterwards. Observed against the real API: deleting during
+    PARSING left 13 chunks in the corpus against 0 document records — the
+    workspace showed an empty knowledge base while queries still answered from
+    the deleted file, and no record remained to delete a second time.
+    """
+
+    class _VanishingRepo:
+        """Passes through, but reports the document gone after the first look.
+
+        The worker checks existence once at the start and once after writing the
+        index. Faking the second answer pins the race deterministically, which
+        a sleep between two threads could not.
+        """
+
+        def __init__(self, inner, document_id):
+            self._inner = inner
+            self._document_id = document_id
+            self.lookups = 0
+
+        def get(self, document_id):
+            if document_id == self._document_id:
+                self.lookups += 1
+                if self.lookups > 1:
+                    return None
+            return self._inner.get(document_id)
+
+        def __getattr__(self, name):
+            return getattr(self._inner, name)
+
+    def test_the_chunks_are_discarded_rather_than_left_orphaned(
+        self, repo, tmp_path, corpus
+    ):
+        doc = upload(repo, tmp_path, corpus, SAMPLE)
+        vanishing = self._VanishingRepo(repo, doc.document_id)
+
+        DocumentIndexer(vanishing, embedder=FakeEmbedder()).handle(
+            IndexingJob(job_id="j", document_id=doc.document_id, corpus_id=corpus)
+        )
+
+        # Those chunks were the whole corpus, so the corpus goes with them
+        # rather than being left as an empty, unqueryable index.
+        assert not corpus_layout(corpus).exists
+
+    def test_a_surviving_document_keeps_its_chunks(self, repo, tmp_path, corpus):
+        # The guard must not fire on the normal path.
+        doc = upload(repo, tmp_path, corpus, SAMPLE)
+        DocumentIndexer(repo, embedder=FakeEmbedder()).handle(
+            IndexingJob(job_id="j", document_id=doc.document_id, corpus_id=corpus)
+        )
+
+        assert corpus_layout(corpus).exists
+        assert repo.get(doc.document_id).status is DocumentStatus.READY
+
+    def test_another_document_in_the_corpus_survives_the_discard(
+        self, repo, tmp_path, corpus
+    ):
+        # Only the deleted document's chunks go; the corpus is rebuilt, not wiped.
+        kept = upload(repo, tmp_path, corpus, SAMPLE, name="kept.md")
+        DocumentIndexer(repo, embedder=FakeEmbedder()).handle(
+            IndexingJob(job_id="a", document_id=kept.document_id, corpus_id=corpus)
+        )
+
+        doomed = upload(repo, tmp_path, corpus, SAMPLE, name="doomed.md")
+        vanishing = self._VanishingRepo(repo, doomed.document_id)
+        DocumentIndexer(vanishing, embedder=FakeEmbedder()).handle(
+            IndexingJob(job_id="b", document_id=doomed.document_id, corpus_id=corpus)
+        )
+
+        import json
+
+        records = json.loads(
+            corpus_layout(corpus).metadata_path.read_text(encoding="utf-8")
+        )
+        # The upload's id is in the chunk metadata; the record's top-level
+        # document_id is the filename, which two uploads can share.
+        assert {r["metadata"]["document_id"] for r in records} == {kept.document_id}
+        assert {r["document_id"] for r in records} == {"kept.md"}
+
+    def test_the_corpus_cache_is_invalidated_after_a_discard(
+        self, repo, tmp_path, corpus
+    ):
+        # Whoever holds a loaded retriever must be told, or it keeps serving the
+        # chunks that were just discarded.
+        doc = upload(repo, tmp_path, corpus, SAMPLE)
+        invalidated: list = []
+        vanishing = self._VanishingRepo(repo, doc.document_id)
+
+        DocumentIndexer(
+            vanishing, embedder=FakeEmbedder(), on_indexed=invalidated.append
+        ).handle(IndexingJob(job_id="j", document_id=doc.document_id, corpus_id=corpus))
+
+        assert invalidated == [corpus]
+
+
 class TestIndexingFailures:
     def test_a_missing_file_fails_the_document_rather_than_the_worker(
         self, repo, tmp_path, corpus

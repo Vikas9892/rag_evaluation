@@ -17,7 +17,7 @@ from chunking.chunk import Chunk
 from chunking.config import DEFAULT_CHUNKING, ChunkingConfig, InvalidChunkingConfig
 from chunking.splitter import DocumentSplitter
 from config.logging_config import get_logger
-from corpora import corpus_layout
+from corpora import corpus_layout, remove_document
 from documents import DocumentRepository, DocumentStatus
 from embeddings.embedder import Embedder, shared_embedder
 from embeddings.storage import VectorStorage
@@ -108,6 +108,20 @@ class DocumentIndexer:
             )
             return
 
+        # A document can be deleted while its job is in flight. DELETE removes
+        # whatever chunks are in the index at that moment, and this job writes
+        # its chunks afterwards — so without this the deleted document stays
+        # retrievable, with nothing in the workspace to show for it and no
+        # record left to delete a second time. Observed: delete during PARSING
+        # left 13 orphaned chunks against 0 document records.
+        #
+        # Checked after the write rather than before it, because a check before
+        # only narrows the window. The status update below is already a no-op on
+        # a deleted row; the index is what needs undoing.
+        if self._repo.get(job.document_id) is None:
+            self._discard(job)
+            return
+
         self._repo.set_status(
             job.document_id,
             DocumentStatus.READY,
@@ -126,6 +140,26 @@ class DocumentIndexer:
             len(chunks),
             ", ".join(f"{t.stage} {t.ms:.0f}ms" for t in timings),
         )
+
+    def _discard(self, job: IndexingJob) -> None:
+        """Undo an index write for a document that was deleted mid-job.
+
+        `remove_document` rebuilds the corpus without these chunks, and deletes
+        the corpus outright if they were all of it. It is idempotent, so it is
+        safe when the delete already removed them — the case where the two
+        raced the other way round.
+        """
+        result = remove_document(job.corpus_id, job.document_id)
+        logger.info(
+            "Document %s was deleted while indexing; discarded %d chunk(s) from "
+            "corpus %s%s",
+            job.document_id,
+            result.removed_chunks,
+            job.corpus_id,
+            " (corpus now empty and removed)" if result.corpus_deleted else "",
+        )
+        if self._on_indexed is not None:
+            self._on_indexed(job.corpus_id)
 
     # ------------------------------------------------------------------
     # Stages
