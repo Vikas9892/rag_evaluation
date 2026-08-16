@@ -83,9 +83,13 @@ async def config(service: RAGService = Depends(get_service)) -> ConfigResponse:
         "or the embedding model invalidates every existing index; changing top-K "
         "affects only the next request."
     ),
-    responses={503: {"description": "Pipeline not available"}},
 )
-async def settings(service: RAGService = Depends(get_service)) -> SettingsResponse:
+async def settings() -> SettingsResponse:
+    # No RAGService dependency: every value below is a module constant. Asking
+    # for the pipeline loaded the embedding model and constructed the Groq
+    # client, so a deployment with no GROQ_API_KEY answered 503 — the Settings
+    # page was dead exactly where a reader most needs to see how it is
+    # configured, and every cold start paid for model weights to list defaults.
     def setting(key, label, value, scope, reindex, per_request, note=None):
         return SettingDescriptor(
             key=key,

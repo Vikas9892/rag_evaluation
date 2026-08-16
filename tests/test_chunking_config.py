@@ -91,6 +91,17 @@ class TestSettingsEndpoint:
         groups = client.get("/settings").json()["groups"]
         assert set(groups) == {"retrieval", "generation", "indexing"}
 
+    def test_answers_without_a_generation_backend(self, monkeypatch, client):
+        # /settings once depended on RAGService, which builds the Groq client,
+        # so a deployment with no key got a 503 from the one page that explains
+        # how the deployment is configured. Every value it returns is a
+        # constant; none of them needs a pipeline.
+        monkeypatch.delenv("GROQ_API_KEY", raising=False)
+        response = client.get("/settings")
+
+        assert response.status_code == 200
+        assert response.json()["groups"]
+
     def test_query_time_settings_need_no_reindex(self, client):
         groups = client.get("/settings").json()["groups"]
         assert all(not s["requires_reindex"] for s in groups["retrieval"])
