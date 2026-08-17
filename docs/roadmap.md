@@ -222,11 +222,26 @@ direction worth acting on; it is not yet a settled one, and the UI says so.
 
 | Target | Planned | Actual | Status |
 |---|---|---|---|
-| Backend | Render | AWS Lambda — `aws/lambda_handler.py`, `aws/template.yaml` (SAM), plus `Dockerfile` / `docker-compose.yml` | ✅ deviates |
-| Frontend | Vercel | not deployed | ⬜ |
+| Backend | Render | **AWS EC2 `t4g.small`** — Docker behind Caddy, live at <https://vikas-rag.duckdns.org> | ✅ deviates |
+| Frontend | Vercel | Vercel, imported from GitHub with root directory `frontend/` | ✅ |
 
-Environment: `GROQ_API_KEY` (backend), `NEXT_PUBLIC_API_URL` (frontend),
-`ALLOWED_ORIGINS` (CORS allowlist, added in M6).
+**Render was the plan and does not fit.** The API holds 743 MB resident with the
+model and index loaded, against 512 MB on Render's free instance — 45% over. The
+alternative was replacing PyTorch with ONNX Runtime in the embedding path, which
+is surgery on the one component every number in
+[benchmark_report.md](benchmark_report.md) depends on, to save a bill that is
+zero either way. EC2 at ~$17/month keeps the retrieval core untouched, and the
+live deployment reproduces every quality metric exactly.
+
+**Lambda was the previous actual and does not fit either.** It routes three
+endpoints, its `lifespan="off"` means the indexing worker never starts, and
+`/var/task` is read-only so SQLite and every index rebuild fail. It remains a
+good fit for the query-only service it was written for. Full detail in
+[deployment.md](deployment.md).
+
+Environment: `GROQ_API_KEY` (backend), `NEXT_PUBLIC_API_URL` (frontend, inlined
+at build time), `ALLOWED_ORIGINS` (CORS allowlist, added in M6),
+`STORAGE_EPHEMERAL` (`0` on EC2, since the EBS volume genuinely persists).
 
 ## Phase 9 — Documentation
 
@@ -370,9 +385,10 @@ went 67% → 90%; the suite went 651 → 666 tests and 93% → 94%.
 
 ## What is left
 
-- **Deploy the frontend.** `frontend/vercel.json` and
-  [deployment.md](deployment.md) are ready; the deploy itself needs Vercel
-  credentials this repository does not hold. The backend runs on AWS Lambda.
+- **Uploads on the live instance are not durably queued.** The EBS volume
+  persists them, so a restart no longer loses documents, but the queue is still
+  an in-process thread — a restart mid-index strands a job, which startup
+  recovery then requeues. `REDIS_URL` is the fix and costs another service.
 - **Generation quality is unmeasured.** Every metric here is retrieval-only. The
   generation evaluator exists and costs LLM calls, so it has no endpoint yet.
 - **A demo GIF.** Screenshots are captured headlessly into `docs/screenshots/`;

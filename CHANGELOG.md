@@ -98,6 +98,26 @@ the same retriever the Evaluation Lab benchmarks.
 - **Indexing timings** are stored on the document and shown in the workspace,
   instead of only reaching a server log.
 
+### Deployed
+
+- **API live at <https://vikas-rag.duckdns.org>** — one EC2 `t4g.small` (2 vCPU
+  Graviton, 2 GiB) running Docker behind Caddy, with a Let's Encrypt certificate
+  on a DuckDNS subdomain. The benchmark corpus and the model weights are built
+  into the image, so a cold start loads from local disk rather than downloading
+  130 MB and re-indexing.
+- **Sized on a measurement, not a guess.** The API holds 743 MB resident with
+  the model and index loaded, which rules out every 1 GB free-tier instance and
+  rules out Render's free plan at 512 MB. ~$17/month, and the retrieval core is
+  untouched — the alternative was replacing PyTorch with ONNX to fit a smaller
+  box, which is surgery on the component every published metric depends on.
+- **Uploads persist here.** The EBS volume is real storage, so
+  `STORAGE_EPHEMERAL` is `0` and the workspace does not show its
+  temporary-storage warning — on this deployment that would be false.
+- **The deployment reproduces the numbers.** Precision@5 0.2000, Recall@5
+  0.9623, hit rate 0.9623, MRR 0.8780 — identical to local. Retrieval latency is
+  not identical and should not be: p50 48 ms against 27 ms, because two Graviton
+  cores are not a desktop CPU.
+
 ### Unchanged
 
 Retrieval quality. Precision@5 (0.2000), Recall@5 (0.9623), hit rate (0.9623)

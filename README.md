@@ -39,6 +39,34 @@ about your own documents.
 
 ---
 
+## Live
+
+The API runs on a single ARM EC2 instance behind Caddy, with the benchmark corpus
+built into the image.
+
+| | |
+|---|---|
+| **API** | <https://vikas-rag.duckdns.org> |
+| Liveness | [`/health`](https://vikas-rag.duckdns.org/health) |
+| Dependency checks | [`/health/deep`](https://vikas-rag.duckdns.org/health/deep) |
+| What it is running | [`/config`](https://vikas-rag.duckdns.org/config) |
+| Retrieval quality, measured on request | [`/evaluation?top_k=5&retriever=dense`](https://vikas-rag.duckdns.org/evaluation?top_k=5&retriever=dense) |
+| The full sweep | [`/benchmarks`](https://vikas-rag.duckdns.org/benchmarks) |
+| Interactive API docs | [`/docs`](https://vikas-rag.duckdns.org/docs) |
+
+**The deployment reproduces the numbers in this README.** Measured against the
+live instance over the same 53 labelled questions: Precision@5 0.2000, Recall@5
+0.9623, hit rate 0.9623, MRR 0.8780 — identical to the local figures below.
+
+Retrieval latency is not identical, and should not be: p50 48 ms against 27 ms
+locally, because the instance has two Graviton cores rather than a desktop CPU.
+Quality is a property of the index; latency is a property of the machine.
+
+See [docs/deployment.md](docs/deployment.md) for how it is put together and what
+it costs.
+
+---
+
 ## Overview
 
 | Dimension | Choice | Reason |

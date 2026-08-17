@@ -1,5 +1,11 @@
 # Deployment
 
+> **What is actually running.** The API is deployed on AWS EC2 at
+> **<https://vikas-rag.duckdns.org>** — see
+> [The live deployment](#the-live-deployment) for its exact shape, cost and
+> verification. The Hugging Face Spaces path below remains the zero-cost
+> alternative; the Lambda template at the end serves only the query half.
+
 **The recommended free path is [Hugging Face Spaces + Vercel](#free-deployment-hugging-face-spaces--vercel).**
 The AWS Lambda template below predates the workspace programme and serves only
 the query half — see [Lambda's limits](#what-lambda-cannot-do) before choosing it.
@@ -95,6 +101,85 @@ common deployment failure, and it looks like a frontend bug from the browser.
 There is no CI deployment step. CI builds the index and runs the tests; shipping
 is manual and deliberate, because both deploys carry credentials this repository
 does not hold.
+
+---
+
+# The live deployment
+
+**API: <https://vikas-rag.duckdns.org>**
+
+| Piece | What it is |
+|---|---|
+| Compute | One **EC2 `t4g.small`** — 2 vCPU Graviton (ARM64), 2 GiB RAM, `ap-south-1` |
+| Sizing reason | The API holds **743 MB resident** with the model and index loaded. `t3.micro`'s 1 GB — the free-tier size — cannot hold it. |
+| Runtime | Docker, image built **on the instance** so nothing is cross-compiled for ARM |
+| Corpus | Baked into the image at build time, so a cold start loads from local disk instead of downloading a 130 MB model and re-indexing |
+| TLS | **Caddy** reverse proxy, Let's Encrypt certificate, renewed automatically |
+| DNS | DuckDNS subdomain — free, and enough for a certificate |
+| Storage | EBS gp3, mounted as a named volume, so **uploads survive a restart** and `STORAGE_EPHEMERAL` is legitimately `0` |
+| Queue | In-process worker thread. `/queue` reports `durable: false` rather than implying otherwise. |
+
+## Why HTTPS was not optional
+
+The frontend is served over HTTPS, and a page loaded over HTTPS cannot call an
+HTTP API — the browser blocks it as mixed content before the request leaves. TLS
+on the API is therefore load-bearing, not polish, which is what Caddy is for.
+
+## What it costs
+
+`ap-south-1`, on-demand, running continuously:
+
+| Line | $/month |
+|---|---|
+| `t4g.small` | 12.41 |
+| EBS gp3, 20 GB | 1.60 |
+| Public IPv4 (charged since Feb 2024, even in use) | 3.65 |
+| DuckDNS, Vercel Hobby, data transfer under 100 GB | 0.00 |
+| **Total** | **≈ 17.66** |
+
+A 1-year Compute Savings Plan takes the instance to ~$8.03, and a new account's
+$200 of Free Plan credits covers roughly six months outright. **Do not add a load
+balancer or a NAT Gateway** — either one costs more than everything above.
+
+## Verifying it
+
+```bash
+API=https://vikas-rag.duckdns.org
+curl -s "$API/health"        # process up
+curl -s "$API/health/deep"   # index present, key set, disk free
+curl -s "$API/config"        # 148 indexed_chunks, 8 documents
+curl -s "$API/evaluation?top_k=5&retriever=dense"
+```
+
+Measured against the live instance:
+
+| Metric | Local | Live |
+|---|---|---|
+| Precision@5 | 0.2000 | **0.2000** |
+| Recall@5 | 0.9623 | **0.9623** |
+| Hit rate | 0.9623 | **0.9623** |
+| MRR | 0.8780 | **0.8780** |
+| p50 retrieval latency | 27 ms | 48 ms |
+| p95 retrieval latency | 33 ms | 55 ms |
+
+Quality is identical because it is a property of the index and the labels.
+Latency is not, because it is a property of two Graviton cores versus a desktop
+CPU — which is exactly why this platform reports p50 and p95 rather than one
+number, and why a latency figure quoted without its machine means little.
+
+## Operating notes
+
+- `ALLOWED_ORIGINS` must list the frontend's exact origin. Vercel preview
+  deployments each get their own hostname and are therefore blocked by design;
+  add them explicitly if needed. `*` is accepted and logs a warning — it also
+  lets any page on the internet spend the deployment's Groq budget.
+- `GROQ_API_KEY` lives in a `chmod 600` `.env` on the instance, read by
+  `env_file`, and is never baked into the image. `env_file` is read at container
+  start, so rotating the key needs `docker compose up -d`, not just an edit.
+- `restart: unless-stopped` is what makes the deployment survive a reboot or an
+  AWS maintenance event without a human.
+- 2 GB of swap is configured. It is not for running the app — it is for the image
+  build, where unpacking torch on a 2 GB box is what gets killed first.
 
 ---
 
