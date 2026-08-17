@@ -1,6 +1,7 @@
 # Deployment
 
-> **What is actually running.** The API is deployed on AWS EC2 at
+> **What is actually running.** The app is live at
+> **<https://rag-evaluation-rosy.vercel.app>**, with the API on AWS EC2 at
 > **<https://vikas-rag.duckdns.org>** — see
 > [The live deployment](#the-live-deployment) for its exact shape, cost and
 > verification. The Hugging Face Spaces path below remains the zero-cost
@@ -10,12 +11,15 @@
 The AWS Lambda template below predates the workspace programme and serves only
 the query half — see [Lambda's limits](#what-lambda-cannot-do) before choosing it.
 
-The backend runs on AWS Lambda behind API Gateway (`aws/template.yaml`). The
-frontend is a static Next.js build intended for Vercel.
+Three deployment targets are documented here, in the order they are worth
+considering: the **EC2 setup that is actually live**, **Hugging Face Spaces** as
+the zero-cost alternative, and the **Lambda template**, which predates the
+workspace programme and only serves the query half.
 
-The two are deployed independently and know about each other through exactly two
-environment variables. Getting those wrong is the only way this fails, so they
-are the first thing to check.
+All three share one property: the front end and the API are deployed
+independently and know about each other through exactly two environment
+variables. Getting those wrong is the only way any of them fails, so they are the
+first thing to check.
 
 ## The two variables
 
@@ -106,10 +110,12 @@ does not hold.
 
 # The live deployment
 
+**App: <https://rag-evaluation-rosy.vercel.app>**
 **API: <https://vikas-rag.duckdns.org>**
 
 | Piece | What it is |
 |---|---|
+| Front end | **Vercel**, imported from GitHub with root directory `frontend/`, redeploying on every push to `main` |
 | Compute | One **EC2 `t4g.small`** — 2 vCPU Graviton (ARM64), 2 GiB RAM, `ap-south-1` |
 | Sizing reason | The API holds **743 MB resident** with the model and index loaded. `t3.micro`'s 1 GB — the free-tier size — cannot hold it. |
 | Runtime | Docker, image built **on the instance** so nothing is cross-compiled for ARM |

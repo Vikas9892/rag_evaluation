@@ -100,7 +100,8 @@ the same retriever the Evaluation Lab benchmarks.
 
 ### Deployed
 
-- **API live at <https://vikas-rag.duckdns.org>** — one EC2 `t4g.small` (2 vCPU
+- **Live at <https://rag-evaluation-rosy.vercel.app>**, front end on Vercel.
+- **API at <https://vikas-rag.duckdns.org>** — one EC2 `t4g.small` (2 vCPU
   Graviton, 2 GiB) running Docker behind Caddy, with a Let's Encrypt certificate
   on a DuckDNS subdomain. The benchmark corpus and the model weights are built
   into the image, so a cold start loads from local disk rather than downloading

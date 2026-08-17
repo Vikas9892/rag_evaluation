@@ -223,7 +223,7 @@ direction worth acting on; it is not yet a settled one, and the UI says so.
 | Target | Planned | Actual | Status |
 |---|---|---|---|
 | Backend | Render | **AWS EC2 `t4g.small`** — Docker behind Caddy, live at <https://vikas-rag.duckdns.org> | ✅ deviates |
-| Frontend | Vercel | Vercel, imported from GitHub with root directory `frontend/` | ✅ |
+| Frontend | Vercel | Vercel, live at <https://rag-evaluation-rosy.vercel.app>, redeploying on every push to `main` | ✅ |
 
 **Render was the plan and does not fit.** The API holds 743 MB resident with the
 model and index loaded, against 512 MB on Render's free instance — 45% over. The

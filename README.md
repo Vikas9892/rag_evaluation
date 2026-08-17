@@ -41,11 +41,16 @@ about your own documents.
 
 ## Live
 
-The API runs on a single ARM EC2 instance behind Caddy, with the benchmark corpus
-built into the image.
+**→ <https://rag-evaluation-rosy.vercel.app>**
+
+The front end is on Vercel; the API runs on a single ARM EC2 instance behind
+Caddy, with the benchmark corpus built into the image. The browser calls the API
+directly, so the latency the platform reports is the latency it actually
+delivered.
 
 | | |
 |---|---|
+| **App** | <https://rag-evaluation-rosy.vercel.app> |
 | **API** | <https://vikas-rag.duckdns.org> |
 | Liveness | [`/health`](https://vikas-rag.duckdns.org/health) |
 | Dependency checks | [`/health/deep`](https://vikas-rag.duckdns.org/health/deep) |
