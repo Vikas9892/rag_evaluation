@@ -85,10 +85,10 @@ would need tombstones at a larger one.
                              │ POST /query  (JSON)
                              ▼
 ┌─────────────────────────────────────────────────────────────────┐
-│                    API Gateway (HTTP API)                        │
-│                   AWS SAM / CloudFormation                       │
+│                  Caddy  (TLS, Let's Encrypt)                     │
+│                  reverse_proxy → api:8000                        │
 └────────────────────────────┬────────────────────────────────────┘
-                             │ Mangum ASGI adapter
+                             │ HTTP, inside the Docker network
                              ▼
 ┌─────────────────────────────────────────────────────────────────┐
 │                       FastAPI App                                │
@@ -199,30 +199,46 @@ Query + Top-K*M candidates (e.g. 20)
 
 ---
 
-## AWS Deployment
+## AWS Deployment — what actually runs
+
+The API is one EC2 instance running two containers. There is no API Gateway, no
+Lambda and no SSM in the live path; `aws/template.yaml` is retained but not
+deployed — see [deployment.md](deployment.md) for the three reasons it does not
+fit this workload.
 
 ```
-┌─────────────────────────────────────────────────────┐
-│                     AWS Region                       │
-│                                                      │
-│  ┌──────────────────────────────────────────────┐   │
-│  │              API Gateway (HTTP API)           │   │
-│  └────────────────────┬─────────────────────────┘   │
-│                       │                             │
-│  ┌────────────────────▼─────────────────────────┐   │
-│  │              Lambda Function                  │   │
-│  │  handler = Mangum(FastAPI app)                │   │
-│  │  Runtime: Python 3.12 · Memory: 1024 MB       │   │
-│  │  Timeout: 60 s                                │   │
-│  └──────────┬────────────────────────────────────┘   │
-│             │                                       │
-│     ┌───────▼────────┐  ┌──────────────────────┐   │
-│     │  Parameter     │  │  CloudWatch Logs      │   │
-│     │  Store (SSM)   │  │  (JSON structured)    │   │
-│     │  GROQ_API_KEY  │  │                       │   │
-│     └────────────────┘  └──────────────────────┘   │
-└─────────────────────────────────────────────────────┘
+        Browser
+           │ HTTPS
+           ▼
+┌──────────────────────┐        ┌─────────────────────────────────────────┐
+│  Vercel (front end)  │        │        AWS ap-south-1                    │
+│  Next.js, static +   │        │                                          │
+│  CDN, root: frontend │        │  EC2 t4g.small — 2 vCPU Graviton, 2 GiB  │
+└──────────┬───────────┘        │  ┌────────────────────────────────────┐  │
+           │                    │  │ caddy:2-alpine   :80 :443          │  │
+           │  the browser calls │  │ Let's Encrypt, auto-renewed        │  │
+           │  the API directly  │  └──────────────┬─────────────────────┘  │
+           └───────────────────────────────────►  │ reverse_proxy          │
+              HTTPS, CORS-checked│  ┌─────────────▼─────────────────────┐  │
+                                 │  │ rag-api  (uvicorn :8000)          │  │
+                                 │  │ corpus + model weights baked into │  │
+                                 │  │ the image at build time           │  │
+                                 │  │ .env (chmod 600) → GROQ_API_KEY   │  │
+                                 │  └─────────────┬─────────────────────┘  │
+                                 │                │                        │
+                                 │      ┌─────────▼──────────┐             │
+                                 │      │ EBS gp3, named vol │             │
+                                 │      │ /app/index         │             │
+                                 │      │ uploads + SQLite   │             │
+                                 │      │ survive a restart  │             │
+                                 │      └────────────────────┘             │
+                                 └─────────────────────────────────────────┘
 ```
+
+**Why an instance and not a function.** The API holds 743 MB resident with the
+model and index loaded, needs a writable filesystem for uploads and the document
+database, and runs a background worker that must outlive a request. A function
+gives none of those. DuckDNS supplies the hostname the certificate is issued for.
 
 ---
 
@@ -265,7 +281,7 @@ api/
   └── app.py
 
 aws/
-  └── lambda_handler.py     (Mangum wrapper)
+  └── lambda_handler.py     (Mangum wrapper — retained, not deployed)
   └── template.yaml         (SAM/CloudFormation)
 
 evaluation/

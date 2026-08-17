@@ -82,8 +82,8 @@ it costs.
 | Fusion | Reciprocal Rank Fusion (k=60) | State-of-the-art hybrid combining |
 | Re-ranking | CrossEncoder ms-marco-MiniLM-L-6 | Fine-grained relevance, 22 M params |
 | LLM | Groq / llama-3.1-8b-instant | < 2 s TTFT, free tier for evaluation |
-| API | FastAPI + Mangum | Async, auto-OpenAPI docs, Lambda-compatible |
-| Deployment | AWS Lambda + HTTP API Gateway | Scale-to-zero, no ops overhead |
+| API | FastAPI | Async, auto-OpenAPI docs, streams over SSE |
+| Deployment | EC2 `t4g.small` + Docker + Caddy | 743 MB resident does not fit a 1 GB free tier; ~$17/month |
 | CI | GitHub Actions | Builds the index, then runs the suite on Python 3.11 + 3.12 |
 
 ---
@@ -467,21 +467,42 @@ in a clone nobody has touched.
 
 ## Deployment
 
-### AWS Lambda (SAM)
+### What is actually running — EC2
+
+One `t4g.small`: 2 vCPU Graviton, 2 GiB. The image is built **on the instance**, so
+nothing is cross-compiled for ARM, and the benchmark corpus and model weights are
+baked in, so a cold start loads from local disk rather than downloading 130 MB and
+re-indexing.
 
 ```bash
-# Store your Groq key in SSM first
-aws ssm put-parameter \
-  --name /rag/groq_api_key \
-  --value "gsk_..." \
-  --type SecureString
-
-# Build and deploy
-sam build
-sam deploy --guided
+git clone https://github.com/Vikas9892/rag_evaluation.git && cd rag_evaluation
+printf 'GROQ_API_KEY=%s\n' 'gsk_...' > .env && chmod 600 .env
+docker build -t rag-eval:latest .
+docker compose up -d          # Caddy terminates TLS in front of the API
 ```
 
-See [aws/template.yaml](aws/template.yaml) for the full SAM template.
+The front end is a separate Vercel project with root directory `frontend/`. The two
+know about each other through exactly two variables: `NEXT_PUBLIC_API_URL` on the
+front end, `ALLOWED_ORIGINS` on the API. Full steps, costs and the verification
+sequence are in [docs/deployment.md](docs/deployment.md).
+
+### Why not Lambda
+
+`aws/template.yaml` and `aws/lambda_handler.py` are still in the tree and are **not
+what runs.** Three reasons, each independently disqualifying:
+
+- It declares `HttpApi` events for `/query`, `/health` and `/metrics` only —
+  `/documents`, `/evaluation`, `/benchmarks`, `/config`, `/settings` and `/stream`
+  would all 404.
+- `lifespan="off"` means `start_indexing_worker()` never runs, so an upload would
+  return its 202 and sit at `QUEUED` for ever. That setting is *correct* for
+  Lambda — a background thread cannot outlive an invocation — which is the point:
+  the workload outgrew the host.
+- `INDEX_DIR` resolves inside the read-only `/var/task`, so SQLite and every index
+  rebuild fail.
+
+It remains a reasonable fit for the query-only service it was written for, which is
+what this project was when the template was added.
 
 ### Local (uvicorn)
 
@@ -520,7 +541,7 @@ rag_evaluation/
 │   ├── schemas.py        # Pydantic request/response models
 │   ├── dependencies.py   # lru_cache singleton injection
 │   └── routers/          # /query /stream /health /metrics
-├── aws/                  # Mangum handler, SAM template
+├── aws/                  # Lambda handler and SAM template — retained, not deployed
 ├── corpora/              # Per-corpus paths, id validation, index rebuild
 ├── documents/            # Document records (SQLite), upload storage
 ├── jobs/                 # Job queue (in-process / Redis), indexing worker
@@ -555,11 +576,11 @@ Eight Architecture Decision Records document the key technical choices:
 |---|----------|---------|
 | [001](docs/decisions/001-parser.md) | Document Parser | BaseParser + registry; PyMuPDF over pypdf |
 | [002](docs/decisions/002-recursive-chunking.md) | Chunking | Heading-aware 250/50 with a merge floor; why not sentence splitters |
-| [003](docs/decisions/003-bge.md) | Embedding Model | BGE-small: best MTEB/MB ratio under Lambda limit |
+| [003](docs/decisions/003-bge.md) | Embedding Model | BGE-small: best MTEB score per MB of weights |
 | [004](docs/decisions/004-faiss.md) | Vector Index | IndexFlatIP exact search; why not HNSW at this scale |
 | [005](docs/decisions/005-provider-abstraction.md) | Abstractions | BaseGenerator/Parser/Reranker; testability rationale |
 | [006](docs/decisions/006-evaluation.md) | Evaluation | Separate retrieval vs generation metrics; LLM-as-judge |
-| [007](docs/decisions/007-lambda.md) | Deployment | Lambda vs Fargate; Mangum; HTTP API vs REST API |
+| [007](docs/decisions/007-lambda.md) | Deployment | Lambda vs Fargate — superseded; see deployment.md for what shipped |
 | [008](docs/decisions/008-frontend-architecture.md) | Frontend | Next.js App Router; types generated from OpenAPI; TanStack Query |
 
 ---
@@ -606,6 +627,6 @@ straight about its own.
 - **Feedback loop** — record user ratings and use them to re-train the embedding model
 
 ### Production hardening
-- Store FAISS index and model weights in S3; load into `/tmp` at Lambda cold start
-- Lambda SnapStart (when available for Python) to eliminate cold starts
+- Move the index to S3 or EFS so more than one instance can serve it
+- Redis for the indexing queue, so a restart mid-index cannot strand a job
 - OpenTelemetry instrumentation for distributed tracing

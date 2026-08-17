@@ -1,9 +1,30 @@
 # ADR 007 — Deployment Target (AWS Lambda + Mangum)
 
-**Status:** Accepted  
+**Status:** ⛔ **Superseded 2026-08 — the platform runs on EC2.** The reasoning
+below was sound for the service this was when it was written, and is kept as
+written.
 **Date:** 2026-07
 
 ---
+
+> **What replaced it.** One EC2 `t4g.small` running Docker behind Caddy, live at
+> <https://vikas-rag.duckdns.org>. `aws/template.yaml` is retained but not
+> deployed.
+>
+> **Why the decision reversed.** Every premise in the Context below stopped
+> holding once the workspace programme landed:
+>
+> - *"deployable without managing a persistent server"* — the platform now runs a
+>   background indexing worker that must outlive a request. A function cannot host
+>   one; `lifespan="off"` in `aws/lambda_handler.py` means it never starts.
+> - *"scale to zero when idle"* — still true of Lambda, and still attractive, but
+>   the API holds **743 MB resident** with the model and index loaded and needs a
+>   **writable** filesystem for uploads and the SQLite document store. `/var/task`
+>   is read-only.
+> - The template also routes only `/query`, `/health` and `/metrics`, so the
+>   fifteen endpoints added since would 404.
+>
+> Full detail and cost in [deployment.md](../deployment.md).
 
 ## Context
 
