@@ -19,6 +19,7 @@ logger = get_logger(__name__)
 
 # Retry on these transient error categories; fail-fast on auth / bad-request.
 _RETRYABLE = ("RateLimitError", "APIConnectionError", "APITimeoutError")
+_FALLBACK_MODEL = "openai/gpt-oss-20b"
 
 
 class BaseGenerator(ABC):
@@ -75,13 +76,14 @@ class GroqGenerator(BaseGenerator):
                 "Export it as an environment variable before running."
             )
 
-        self.model = model
+        resolved_model = os.environ.get("LLM_MODEL", model)
+        self.model = resolved_model
         self.temperature = temperature
         self.max_tokens = max_tokens
         self.timeout = timeout
         self.max_retries = max_retries
         self._client = Groq(api_key=resolved_key)
-        logger.info("GroqGenerator ready (model=%s)", model)
+        logger.info("GroqGenerator ready (model=%s)", self.model)
 
     # ------------------------------------------------------------------
     # Public
@@ -128,18 +130,40 @@ class GroqGenerator(BaseGenerator):
         self, prompt: Prompt, sources: List[RetrievalResult]
     ) -> Generator[str, None, None]:
         """Yield answer tokens as they arrive from the Groq streaming API."""
+        import groq as _groq
+
         messages = [
             {"role": "system", "content": prompt.system},
             {"role": "user", "content": prompt.user},
         ]
-        response = self._client.chat.completions.create(
-            model=self.model,
-            messages=messages,
-            temperature=self.temperature,
-            max_tokens=self.max_tokens,
-            timeout=self.timeout,
-            stream=True,
-        )
+        try:
+            response = self._client.chat.completions.create(
+                model=self.model,
+                messages=messages,
+                temperature=self.temperature,
+                max_tokens=self.max_tokens,
+                timeout=self.timeout,
+                stream=True,
+            )
+        except _groq.NotFoundError as exc:
+            if self.model != _FALLBACK_MODEL:
+                logger.warning(
+                    "Model '%s' not found on Groq (%s); falling back to %s",
+                    self.model,
+                    exc,
+                    _FALLBACK_MODEL,
+                )
+                self.model = _FALLBACK_MODEL
+                response = self._client.chat.completions.create(
+                    model=self.model,
+                    messages=messages,
+                    temperature=self.temperature,
+                    max_tokens=self.max_tokens,
+                    timeout=self.timeout,
+                    stream=True,
+                )
+            else:
+                raise
         for chunk in response:
             delta = chunk.choices[0].delta
             if delta.content:
@@ -180,6 +204,23 @@ class GroqGenerator(BaseGenerator):
                     )
                     time.sleep(delay)
                     delay *= 2
+            except _groq.NotFoundError as exc:
+                if self.model != _FALLBACK_MODEL:
+                    logger.warning(
+                        "Model '%s' not found on Groq (%s); falling back to %s",
+                        self.model,
+                        exc,
+                        _FALLBACK_MODEL,
+                    )
+                    self.model = _FALLBACK_MODEL
+                    return self._client.chat.completions.create(
+                        model=self.model,
+                        messages=messages,
+                        temperature=self.temperature,
+                        max_tokens=self.max_tokens,
+                        timeout=self.timeout,
+                    )
+                raise
             except Exception:
                 # AuthenticationError, BadRequestError, etc. — fail immediately
                 raise

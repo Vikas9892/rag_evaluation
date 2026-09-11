@@ -50,11 +50,17 @@ class TestResolveAllowedOrigins:
         assert resolve_allowed_origins("http://a.test,,") == ["http://a.test"]
 
     def test_wildcard_is_permitted_but_warned(self, caplog):
+        from config.logging_config import get_logger
+
+        get_logger("api.app").propagate = True
         with caplog.at_level("WARNING"):
             assert resolve_allowed_origins("*") == ["*"]
         assert "open to every origin" in caplog.text
 
     def test_explicit_allowlist_logs_no_warning(self, caplog):
+        from config.logging_config import get_logger
+
+        get_logger("api.app").propagate = True
         with caplog.at_level("WARNING"):
             resolve_allowed_origins("http://a.test")
         assert "open to every origin" not in caplog.text

@@ -1,3 +1,4 @@
+import os
 from pathlib import Path
 
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -28,7 +29,7 @@ VECTORS_FILE = INDEX_DIR / "vectors.npy"
 METADATA_FILE = INDEX_DIR / "metadata.json"
 FAISS_INDEX_FILE = INDEX_DIR / "faiss.index"
 
-LLM_MODEL = "llama-3.1-8b-instant"
+LLM_MODEL = os.environ.get("LLM_MODEL", "openai/gpt-oss-20b")
 LLM_TEMPERATURE = 0.0
 LLM_MAX_TOKENS = 1024
 REQUEST_TIMEOUT = 30.0
